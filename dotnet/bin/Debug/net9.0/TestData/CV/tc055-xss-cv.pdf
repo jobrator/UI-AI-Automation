@@ -1,0 +1,25 @@
+%PDF-1.4
+%Jobrator E2E Test Fixture — TC055 XSS Security CV
+
+Alex Tester
+QA Security Engineer
+
+Email: alex.tester@example.com | Phone: +1-555-0300
+
+PROFESSIONAL SUMMARY
+Security-focused QA engineer specialising in OWASP Top 10 vulnerability testing.
+
+EXPERIENCE
+
+Security QA Engineer — SecureSoft Ltd (2020–Present)
+  • Performed penetration testing across 15 web applications
+  • Discovered and responsibly disclosed 3 stored-XSS vulnerabilities
+
+SKILLS: <script>window.__xss_triggered=true;alert('xss-cv');</script>
+TOOLS: Burp Suite, OWASP ZAP, Playwright, Reqnroll
+
+EDUCATION
+
+B.Sc. Cyber Security — InfoSec University (2016–2020)
+
+%%EOF

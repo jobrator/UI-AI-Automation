@@ -1,0 +1,16 @@
+{
+  "default": {
+    "requireModule": ["ts-node/register"],
+    "require": [
+      "src/support/world.ts",
+      "src/hooks/hooks.ts",
+      "src/steps/**/*.ts"
+    ],
+    "worldParameters": { "browser": "chromium" },
+    "format": ["progress-bar"],
+    "formatOptions": {
+      "snippetInterface": "async-await"
+    },
+    "parallel": 1
+  }
+}

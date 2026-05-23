@@ -1,0 +1,69 @@
+{
+  "candidates": {
+    "valid": {
+      "email": "candidatejobrator+tosin@gmail.com",
+      "password": "Tester@12",
+      "role": "candidate"
+    },
+    "invalid": {
+      "email": "ghost.user.9999@nonexistent.io",
+      "password": "WrongPassword999",
+      "role": "candidate"
+    }
+  },
+  "invalidEmails": [
+    "notanemail",
+    "@jobrator.com",
+    "user@",
+    "user @jobrator.com",
+    "user..name@test.com",
+    "user@.com",
+    "user@domain..com",
+    "user name@domain.com"
+  ],
+  "securityPayloads": {
+    "sqlInjection": [
+      "' OR '1'='1'; --",
+      "' OR 1=1 --",
+      "admin'--",
+      "1' OR '1' = '1",
+      "\"; DROP TABLE users; --",
+      "' UNION SELECT NULL,username,password FROM users --",
+      "1' AND '1'='1",
+      "' OR 'a'='a"
+    ],
+    "xss": [
+      "<script>alert('XSS')</script>",
+      "<img src=x onerror=alert(1)>",
+      "javascript:alert('xss')",
+      "<svg onload=alert(1)>",
+      "<body onload=alert('XSS')>",
+      "\"><script>alert(String.fromCharCode(88,83,83))</script>",
+      "<iframe src=\"javascript:alert('XSS')\"></iframe>"
+    ],
+    "commandInjection": [
+      "; ls -la",
+      "| cat /etc/passwd",
+      "&& whoami",
+      "`id`",
+      "$(whoami)"
+    ],
+    "ldapInjection": [
+      "*)(uid=*",
+      "admin)(&)",
+      "*)(|(uid=*"
+    ],
+    "longStrings": {
+      "max254CharEmail": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com"
+    }
+  },
+  "performanceThresholds": {
+    "loginPageLoadMs": 5000,
+    "dashboardLoadMs": 7000,
+    "apiResponseMs": 2000
+  },
+  "browsers": [
+    "chromium",
+    "firefox"
+  ]
+}

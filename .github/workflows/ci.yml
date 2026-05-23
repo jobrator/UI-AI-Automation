@@ -1,0 +1,115 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Nightly regression at 02:00 UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: 'Cucumber tags to run (e.g. "@smoke")'
+        required: false
+        default: '@smoke'
+
+jobs:
+  e2e:
+    name: ${{ matrix.browser }} — ${{ matrix.shard }}/${{ matrix.totalShards }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chrome, firefox]
+        shard: [1, 2]
+        totalShards: [2]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps ${{ matrix.browser == 'chrome' && 'chromium' || 'firefox' }}
+
+      - name: Create .env from secrets
+        run: |
+          echo "JOBRATOR_SITE=${{ vars.JOBRATOR_SITE || 'https://jobrator.com/' }}" > .env
+          echo "CANDIDATE_EMAIL=${{ secrets.CANDIDATE_EMAIL }}" >> .env
+          echo "CANDIDATE_PASSWORD=${{ secrets.CANDIDATE_PASSWORD }}" >> .env
+          echo "BROWSER=${{ matrix.browser == 'chrome' && 'chromium' || 'firefox' }}" >> .env
+          echo "HEADLESS=true" >> .env
+          echo "DEFAULT_TIMEOUT=45000" >> .env
+          echo "NAVIGATION_TIMEOUT=60000" >> .env
+
+      - name: Run BDD tests
+        run: |
+          node scripts/run-parallel.js \
+            --browser=${{ matrix.browser }} \
+            --tags="${{ github.event.inputs.tags || '@smoke or @regression' }}"
+        continue-on-error: false
+
+      - name: Upload Cucumber JSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cucumber-json-${{ matrix.browser }}-${{ matrix.shard }}
+          path: reports/cucumber-report*.json
+
+      - name: Upload screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ matrix.browser }}-${{ matrix.shard }}
+          path: reports/screenshots/
+
+      - name: Upload videos
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: videos-${{ matrix.browser }}-${{ matrix.shard }}
+          path: reports/videos/
+
+      - name: Upload traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: traces-${{ matrix.browser }}-${{ matrix.shard }}
+          path: reports/traces/
+
+  report:
+    name: Build HTML Report
+    needs: e2e
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+
+      - name: Download all JSON artefacts
+        uses: actions/download-artifact@v4
+        with:
+          path: reports/
+          pattern: cucumber-json-*
+          merge-multiple: true
+
+      - name: Generate HTML report
+        run: node scripts/generate-report.js
+
+      - name: Publish HTML report
+        uses: actions/upload-artifact@v4
+        with:
+          name: cucumber-html-report
+          path: reports/html/

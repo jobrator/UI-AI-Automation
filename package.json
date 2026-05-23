@@ -1,0 +1,43 @@
+{
+  "name": "jobrator-e2e",
+  "version": "1.0.0",
+  "description": "BDD End-to-End Playwright Automation Framework for Jobrator with AI Agents",
+  "main": "index.js",
+  "scripts": {
+    "test": "node scripts/run-parallel.js",
+    "test:chrome": "cross-env BROWSER=chromium cucumber-js --config cucumber.js --profile chrome",
+    "test:firefox": "cross-env BROWSER=firefox cucumber-js --config cucumber.js --profile firefox",
+    "test:chrome:headed": "cross-env BROWSER=chromium HEADLESS=false cucumber-js --config cucumber.js --profile chrome",
+    "test:firefox:headed": "cross-env BROWSER=firefox HEADLESS=false cucumber-js --config cucumber.js --profile firefox",
+    "test:sequential": "cross-env BROWSER=chromium cucumber-js --config cucumber.js --profile sequential",
+    "test:smoke": "cross-env BROWSER=chromium cucumber-js --config cucumber.js --profile smoke",
+    "test:security": "node scripts/run-parallel.js --tags @security",
+    "test:regression": "node scripts/run-parallel.js --tags @regression",
+    "agent:planner": "ts-node src/agents/TestPlannerAgent.ts",
+    "agent:codegen": "ts-node src/agents/CodeGeneratorAgent.ts",
+    "report:generate": "node scripts/generate-report.js",
+    "report:open": "open reports/html/index.html",
+    "lint": "eslint src/**/*.ts --fix",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf reports/cucumber-report.json reports/html dist"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@cucumber/cucumber": "^12.8.3",
+    "@playwright/test": "^1.59.1",
+    "@types/node": "^20.14.0",
+    "cross-env": "^7.0.3",
+    "multiple-cucumber-html-reporter": "^3.8.0",
+    "playwright": "^1.59.1",
+    "playwright-bdd": "^8.2.1",
+    "rimraf": "^6.0.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

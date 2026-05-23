@@ -1,0 +1,30 @@
+node_modules/
+dist/
+.env
+
+# Reports
+reports/cucumber-report.json
+reports/html/
+reports/screenshots/
+reports/videos/
+reports/traces/
+reports/@rerun.txt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Playwright
+playwright/.auth/
+test-results/
+playwright-report/
+
+# Logs
+*.log
+npm-debug.log*
