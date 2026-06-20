@@ -21,9 +21,18 @@ const common = {
 };
 
 module.exports = {
+  // ── Default profile (used by IDE test runners / bare `cucumber-js`) ─────
+  default: {
+    ...common,
+    parallel: 1,
+    worldParameters: { browser: 'chromium' },
+    tags: 'not @skip'
+  },
+
   // ── Run on Chromium (parallel) ──────────────────────────────────────────
   chrome: {
     ...common,
+    parallel: 2,
     worldParameters: { browser: 'chromium' },
     tags: 'not @skip-chrome and not @skip'
   },

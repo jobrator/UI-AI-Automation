@@ -28,3 +28,13 @@ playwright-report/
 # Logs
 *.log
 npm-debug.log*
+
+# .NET build output
+dotnet/bin/
+dotnet/obj/
+
+# Office docs / temp lock files
+*.pptx
+
+# Debug screenshots
+scripts/*.png

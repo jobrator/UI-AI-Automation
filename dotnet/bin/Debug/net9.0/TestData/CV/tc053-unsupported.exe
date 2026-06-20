@@ -1,4 +1,0 @@
-MZ — Jobrator E2E Test Fixture — TC053 Unsupported File Type
-This file uses an .exe extension to verify that the CV upload endpoint
-rejects executable files and does not indicate a successful upload.
-TC053 — Error Guessing: unsupported file type

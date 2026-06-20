@@ -36,10 +36,18 @@ export class CommonLibrary {
   async navigateTo(url: string, waitUntil: 'load' | 'domcontentloaded' | 'networkidle' = 'domcontentloaded'): Promise<void> {
     const target = url.startsWith('http') ? url : `${envConfig.jobratorSite}${url}`;
     console.log(`[Lib] navigateTo → ${target}`);
-    await this.page.goto(target, {
-      waitUntil,
-      timeout: envConfig.navigationTimeout
-    });
+    try {
+      await this.page.goto(target, { waitUntil, timeout: envConfig.navigationTimeout });
+    } catch (err) {
+      const msg = String(err);
+      if (msg.includes('net::ERR_') || msg.includes('ERR_INTERNET_DISCONNECTED')) {
+        console.warn(`[Lib] Navigation error (${msg.split('\n')[0].substring(0, 60)}) — retrying after 2s`);
+        await this.page.waitForTimeout(2000);
+        await this.page.goto(target, { waitUntil, timeout: envConfig.navigationTimeout });
+      } else {
+        throw err;
+      }
+    }
   }
 
   /** Reload current page */
@@ -101,7 +109,7 @@ export class CommonLibrary {
    * The field is cleared first unless `append` is true.
    */
   async fill(selector: string | Locator, value: string, append = false): Promise<void> {
-    const locator = this.resolve(selector);
+    const locator = this.resolve(selector).first();
     await locator.waitFor({ state: 'visible', timeout: envConfig.defaultTimeout });
     if (!append) await locator.clear();
     await locator.fill(value);

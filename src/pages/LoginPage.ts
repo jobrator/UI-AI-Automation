@@ -16,11 +16,15 @@ export class LoginPage extends BasePage {
   // ══════════════════════════════════════════════════════════════════════════
 
   // ── Form inputs ───────────────────────────────────────────────────────────
+  // email is type="text" on Jobrator (not type="email")
   private readonly emailInput =
     'input[name="email"], input[type="email"], [placeholder*="email" i], [data-testid="email-input"]';
 
   private readonly passwordInput =
     'input[name="password"], input[type="password"], [placeholder*="password" i], [data-testid="password-input"]';
+
+  // Required consent / readiness checkbox on the login form
+  private readonly readyCheckbox = 'input[name="checkbox-ready"], #checkbox-ready';
 
   // ── Buttons ───────────────────────────────────────────────────────────────
   private readonly loginButton =
@@ -73,11 +77,11 @@ export class LoginPage extends BasePage {
 
   async navigate(): Promise<void> {
     await this.lib.navigateTo(this.url('/login'));
-    if (!(await this.lib.isVisible(this.emailInput))) {
-      const candidateButton = 'button:has-text("Candidate")';
-      if (await this.lib.isVisible(candidateButton)) {
-        await this.lib.click(candidateButton);
-      }
+    // Always click the Candidate tab to ensure the correct login form is active
+    const candidateButton = 'button:has-text("Candidate")';
+    if (await this.lib.isVisible(candidateButton)) {
+      await this.lib.click(candidateButton);
+      await this.page.waitForTimeout(500);
     }
     await this.lib.waitForElement(this.emailInput);
   }
@@ -106,12 +110,21 @@ export class LoginPage extends BasePage {
   }
 
   /**
-   * Full login flow — enter credentials and submit.
+   * Full login flow — enter credentials, tick the required checkbox, and submit.
    * Does NOT assert success; callers are responsible for assertions.
    */
   async login(email: string, password: string): Promise<void> {
     await this.enterEmail(email);
     await this.enterPassword(password);
+    // The "checkbox-ready" input is hidden (CSS) so Playwright's check() fails even with force.
+    // Use evaluate() to set it directly without actionability checks.
+    await this.page.evaluate(() => {
+      const cb = document.querySelector('input[name="checkbox-ready"]') as HTMLInputElement | null;
+      if (cb && !cb.checked) {
+        cb.checked = true;
+        cb.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    });
     await this.clickLoginButton();
   }
 

@@ -39,6 +39,9 @@
   ],
   "ts-node": {
     "transpileOnly": true,
-    "files": true
+    "files": true,
+    "compilerOptions": {
+      "ignoreDeprecations": "5.0"
+    }
   }
 }

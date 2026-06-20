@@ -20,6 +20,13 @@ export class CustomWorld extends World {
   // ── Scenario metadata ────────────────────────────────────────────────────
   public scenarioMeta!: ScenarioMetadata;
 
+  // ── Cross-step state storage ─────────────────────────────────────────────
+  public linkedInPage?: Page;
+  public downloadedFilename?: string;
+  // Credentials for a freshly-registered candidate (used in subscription scenarios)
+  public freshCandidateEmail?: string;
+  public freshCandidatePassword?: string;
+
   // ── Derived from cucumber worldParameters ────────────────────────────────
   public browserType: SupportedBrowser;
 

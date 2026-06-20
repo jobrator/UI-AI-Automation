@@ -2,6 +2,8 @@ import { Given, When, Then } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 import { CustomWorld } from '../../support/world';
 import { RegistrationPage } from '../../pages/RegistrationPage';
+import { LoginPage } from '../../pages/LoginPage';
+import { ProfilePage } from '../../pages/ProfilePage';
 import { EnvConfig } from '../../config/env.config';
 
 const envConfig = EnvConfig.getInstance();
@@ -236,5 +238,41 @@ Then('the login page should be displayed', async function (this: CustomWorld) {
   expect(
     await loginEmailInput.isVisible(),
     `Expected the login form to be visible. Current URL: ${this.page.url()}`
+  ).toBeTruthy();
+});
+
+When('the candidate logs in with the newly registered account', async function (this: CustomWorld) {
+  const data = s(this).candidateData!;
+  const loginPage = new LoginPage(this.page);
+  await loginPage.navigate();
+  await loginPage.login(data.email, data.password);
+  await this.page.waitForTimeout(4000);
+  this.logMessage(`[Registration] Logged in as new account ${data.email} -> ${this.page.url()}`);
+  expect(
+    loginPage.isOnLoginPage(),
+    `Newly registered account could not log in. URL: ${this.page.url()}`
+  ).toBeFalsy();
+});
+
+When('the candidate deletes their profile from the profile page', async function (this: CustomWorld) {
+  const profilePage = new ProfilePage(this.page);
+  await profilePage.navigate();
+  expect(
+    await profilePage.isDeleteProfileVisible(),
+    '\'Delete Profile\' button was not found on the candidate profile page'
+  ).toBeTruthy();
+  await profilePage.deleteProfile();
+});
+
+Then('the deleted account should no longer be able to log in', async function (this: CustomWorld) {
+  const data = s(this).candidateData!;
+  const loginPage = new LoginPage(this.page);
+  await loginPage.navigate();
+  await loginPage.login(data.email, data.password);
+  await this.page.waitForTimeout(4000);
+  this.logMessage(`[Registration] Re-login attempt after deletion -> ${this.page.url()}`);
+  expect(
+    loginPage.isOnLoginPage(),
+    `Deleted account was still able to authenticate — deletion did not take effect. URL: ${this.page.url()}`
   ).toBeTruthy();
 });
