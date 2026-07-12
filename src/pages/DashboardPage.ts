@@ -75,6 +75,28 @@ export class DashboardPage extends BasePage {
     '.avatar, [data-testid="user-avatar"], [class*="user-avatar"], [class*="profile-img"], ' +
     '.nav-user img, .header-user img, header img, nav img, .navbar-brand img, .logo img';
 
+  // ── Messages ──────────────────────────────────────────────────────────────
+  // Jobrator dashboard left sidebar (not the global ProSidebar) — contains
+  // dashboard-specific nav links including Messages at /dashboard/messages.
+  // We select any anchor pointing to /dashboard/messages that is NOT inside
+  // the Bootstrap dropdown menu (which holds the account dropdown Messages link).
+  private readonly leftPanelMessagesButton =
+    'a[href="/dashboard/messages"], a[href*="/dashboard/messages"]';
+
+  // Stats counter cards near the top of the dashboard body. Jobrator renders
+  // these as "NMessages" (e.g. "2Messages") before "Saved Jobs" (shortlist).
+  private readonly topRightMessagesButton =
+    'a[href*="/dashboard/messages"]';
+
+  // Account dropdown trigger: Bootstrap dropdown-toggle on the user name element
+  private readonly accountMenuButton =
+    'a.dropdown-toggle[data-bs-toggle="dropdown"], a.dropdown-toggle[data-toggle="dropdown"], ' +
+    'a.dropdown-toggle';
+
+  // Messages link inside the Bootstrap dropdown menu
+  private readonly accountMenuMessagesLink =
+    'ul.dropdown-menu a[href*="dashboard/messages"], .dropdown-menu a[href*="messages"]';
+
   // ── Search field ──────────────────────────────────────────────────────────
   private readonly searchInput =
     'input[type="search"], input[placeholder*="search" i], input[placeholder*="job" i], ' +
@@ -324,6 +346,142 @@ export class DashboardPage extends BasePage {
       // Fallback to a broader selector if primary not found
       await this.page.locator('input[type="text"]').first().fill(value, { force: true });
     }
+  }
+
+  // ── Messages actions ──────────────────────────────────────────────────────
+
+  async clickLeftPanelMessages(): Promise<void> {
+    // On /dashboard, the left sidebar contains an <a href="/dashboard/messages"> link
+    // that is NOT inside the Bootstrap .dropdown-menu (which is the account dropdown).
+    // We iterate all matching links and skip the one inside .dropdown-menu.
+    const all = await this.page.locator(this.leftPanelMessagesButton).all();
+    for (const loc of all) {
+      if (!await loc.isVisible()) continue;
+      // Skip if inside a Bootstrap dropdown menu (account dropdown)
+      const insideDropdown = await loc.evaluate(
+        (el) => !!el.closest('ul.dropdown-menu, .dropdown-menu')
+      );
+      if (insideDropdown) continue;
+      // Skip the stats counter link (text starts with a digit, e.g. "2Messages")
+      const text = (await loc.textContent() ?? '').trim();
+      if (/^\d/.test(text)) continue;
+      await loc.click();
+      await this.page.waitForTimeout(1000);
+      return;
+    }
+    // Fallback: navigate directly to the messages page
+    await this.lib.navigateTo(this.url('/dashboard/messages'));
+  }
+
+  async isTopRightMessagesButtonVisible(): Promise<boolean> {
+    // The stats counter cards (e.g. "2Messages") are on /dashboard, not /jobs.
+    if (!/\/dashboard/i.test(this.page.url())) {
+      await this.lib.navigateTo(this.url('/dashboard'));
+      await this.page.waitForLoadState('domcontentloaded');
+      await this.page.waitForTimeout(500);
+    }
+
+    const all = await this.page.locator(this.topRightMessagesButton).all();
+    for (const loc of all) {
+      if (!await loc.isVisible()) continue;
+      const text = (await loc.textContent() ?? '').trim();
+      // The stat counter card has text like "2Messages" (digit prefix)
+      if (/^\d+\s*Messages?/i.test(text)) return true;
+    }
+    // Fallback: any messages link visible on the page
+    return this.lib.isVisible(this.topRightMessagesButton);
+  }
+
+  async clickTopRightMessages(): Promise<void> {
+    // Click the stats-counter "Messages" card (e.g. "2Messages") near the top of the dashboard.
+    const all = await this.page.locator(this.topRightMessagesButton).all();
+    for (const loc of all) {
+      if (!await loc.isVisible()) continue;
+      const text = (await loc.textContent() ?? '').trim();
+      if (/^\d+Messages?/i.test(text) || /^\d+\s*Messages?/i.test(text)) {
+        await loc.click();
+        await this.page.waitForTimeout(1000);
+        return;
+      }
+    }
+    // Fallback: any visible messages link not inside the dropdown
+    for (const loc of all) {
+      if (!await loc.isVisible()) continue;
+      const insideDropdown = await loc.evaluate(
+        (el) => !!el.closest('ul.dropdown-menu, .dropdown-menu')
+      );
+      if (!insideDropdown) {
+        await loc.click();
+        await this.page.waitForTimeout(1000);
+        return;
+      }
+    }
+    await this.lib.navigateTo(this.url('/dashboard/messages'));
+  }
+
+  async openAccountMenu(): Promise<void> {
+    // The account dropdown-toggle (user name/avatar) is only rendered on /dashboard.
+    // If we're on a different page (e.g. /jobs after login), navigate there first.
+    if (!/\/dashboard/i.test(this.page.url())) {
+      await this.lib.navigateTo(this.url('/dashboard'));
+      await this.page.waitForLoadState('domcontentloaded');
+      await this.page.waitForTimeout(500);
+    }
+
+    const all = await this.page.locator(this.accountMenuButton).all();
+    for (const loc of all) {
+      if (await loc.isVisible()) {
+        await loc.click();
+        await this.page.waitForTimeout(600);
+        return;
+      }
+    }
+    // JS fallback — find the element with class "dropdown-toggle"
+    const clicked = await this.page.evaluate(() => {
+      for (const el of Array.from(document.querySelectorAll('.dropdown-toggle'))) {
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          (el as HTMLElement).click();
+          return true;
+        }
+      }
+      return false;
+    });
+    if (!clicked) throw new Error('Account menu toggle (dropdown-toggle) not found in header');
+    await this.page.waitForTimeout(600);
+  }
+
+  async clickAccountMenuMessages(): Promise<void> {
+    // Must be on /dashboard for the account dropdown to exist.
+    if (!/\/dashboard/i.test(this.page.url())) {
+      await this.lib.navigateTo(this.url('/dashboard'));
+      await this.page.waitForLoadState('domcontentloaded');
+      await this.page.waitForTimeout(500);
+    }
+
+    // Ensure the Bootstrap dropdown is open. If .dropdown-menu is not visible
+    // (Bootstrap hides it with display:none when closed), open it by clicking
+    // the toggle.  If it IS already open (from a previous step), skip clicking
+    // to avoid toggling it shut.
+    const dropdownMenu = this.page.locator('ul.dropdown-menu').first();
+    const isOpen = await dropdownMenu.isVisible().catch(() => false);
+    if (!isOpen) {
+      await this.page.locator('a.dropdown-toggle').first().click();
+      await this.page.waitForTimeout(600);
+    }
+
+    // Wait for the messages link inside the dropdown to become visible and click it.
+    const msgLink = this.page.locator('ul.dropdown-menu a[href*="dashboard/messages"]').first();
+    try {
+      await msgLink.waitFor({ state: 'visible', timeout: 5000 });
+    } catch {
+      // Dropdown may have closed between the check and waitFor — re-open once more.
+      await this.page.locator('a.dropdown-toggle').first().click();
+      await this.page.waitForTimeout(600);
+      await msgLink.waitFor({ state: 'visible', timeout: 5000 });
+    }
+    await msgLink.click();
+    await this.page.waitForTimeout(1000);
   }
 
   /** Navigate to the dashboard URL with a forged session cookie. */

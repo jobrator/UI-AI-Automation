@@ -241,7 +241,24 @@ Before({ tags: '@block-scripts' }, async function (this: CustomWorld) {
   this.logMessage('JavaScript blocked for @block-scripts scenario.');
 });
 
-/** For scenarios that need to start already logged in */
+/** For employer scenarios that need to start already logged in */
+Before({ tags: '@requires-employer-login' }, async function (this: CustomWorld) {
+  const { EnvConfig } = await import('../config/env.config');
+  const env = EnvConfig.getInstance();
+  const { EmployerLoginPage } = await import('../pages/EmployerLoginPage');
+
+  const loginPage = new EmployerLoginPage(this.page);
+  await loginPage.navigate();
+  await loginPage.login(env.employerEmail, env.employerPassword);
+
+  await this.page.waitForURL(/dashboard|home|employer|recruiter|jobs/, {
+    timeout: envConfig.navigationTimeout
+  });
+
+  this.logMessage('Pre-condition: employer is now logged in (@requires-employer-login).');
+});
+
+/** For candidate scenarios that need to start already logged in */
 Before({ tags: '@requires-login' }, async function (this: CustomWorld) {
   const { EnvConfig } = await import('../config/env.config');
   const env = EnvConfig.getInstance();
@@ -257,6 +274,67 @@ Before({ tags: '@requires-login' }, async function (this: CustomWorld) {
   });
 
   this.logMessage('Pre-condition: user is now logged in (@requires-login).');
+});
+
+/** For candidate portal scenarios (alias for @requires-login with the @requires-candidate-login tag) */
+Before({ tags: '@requires-candidate-login' }, async function (this: CustomWorld) {
+  const { EnvConfig } = await import('../config/env.config');
+  const env = EnvConfig.getInstance();
+  const { LoginPage } = await import('../pages/LoginPage');
+
+  const loginPage = new LoginPage(this.page);
+  await loginPage.navigate();
+  await loginPage.login(env.candidateEmail, env.candidatePassword);
+
+  // Wait for post-login state
+  await this.page.waitForURL(/dashboard|home|profile|jobs|application/, {
+    timeout: envConfig.navigationTimeout
+  });
+
+  this.logMessage('Pre-condition: candidate is now logged in (@requires-candidate-login).');
+});
+
+/**
+ * For scenarios that would permanently alter account credentials (e.g. TC_CHG002).
+ * Registers a brand-new throwaway account on mailinator.com, logs in as that
+ * account, and stores the credentials on world.freshCandidateEmail /
+ * world.freshCandidatePassword. The shared candidate+tosin@gmail.com account
+ * is never touched.
+ */
+Before({ tags: '@requires-throwaway-candidate' }, async function (this: CustomWorld) {
+  const { RegistrationPage } = await import('../pages/RegistrationPage');
+  const { LoginPage } = await import('../pages/LoginPage');
+
+  const uid = Date.now().toString(36);
+  const throwawayEmail    = `testchgpwd+${uid}@mailinator.com`;
+  const throwawayPassword = `TestChg@${uid.toUpperCase()}1!`;
+
+  // Register
+  const regPage = new RegistrationPage(this.page);
+  await regPage.navigate();
+  await regPage.fillAllFields('Test', 'Throwaway', throwawayEmail, throwawayPassword);
+  await regPage.clickSubmit();
+  await this.page.waitForTimeout(3000);
+
+  const regOk = await regPage.isRegistrationSuccessful();
+  if (!regOk) {
+    this.logMessage(`[Throwaway] Registration may not have completed. URL: ${this.page.url()}`);
+  }
+
+  // If redirected to a verify page, skip — we just need to be logged in
+  const currentUrl = this.page.url();
+  if (!/dashboard/i.test(currentUrl)) {
+    // Try logging in directly
+    const loginPage = new LoginPage(this.page);
+    await loginPage.navigate();
+    await loginPage.login(throwawayEmail, throwawayPassword);
+    await this.page.waitForTimeout(2000);
+  }
+
+  this.freshCandidateEmail    = throwawayEmail;
+  this.freshCandidatePassword = throwawayPassword;
+
+  this.logMessage(`[Throwaway] Registered & logged in as: ${throwawayEmail}`);
 });
 
 // ─── Helper ───────────────────────────────────────────────────────────────────

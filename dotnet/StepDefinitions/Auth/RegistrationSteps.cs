@@ -15,6 +15,8 @@ public sealed class RegistrationSteps
 
     private IPage            Page             => _scenario.Get<PlaywrightDriver>().Page;
     private RegistrationPage RegistrationPage => new(Page, _cfg.JobratorSite);
+    private LoginPage        LoginPage        => new(Page, _cfg.JobratorSite);
+    private ProfilePage      ProfilePage      => new(Page, _cfg.JobratorSite);
 
     private bool _xssDialogSeen;
 
@@ -217,5 +219,38 @@ public sealed class RegistrationSteps
         await loginEmailInput.WaitForAsync(new LocatorWaitForOptions { Timeout = _cfg.ExpectTimeout });
         Assert.That(await loginEmailInput.IsVisibleAsync(), Is.True,
             $"Expected the login form to be visible. Current URL: {Page.Url}");
+    }
+
+    [When("the candidate logs in with the newly registered account")]
+    public async Task WhenCandidateLogsInWithNewAccount()
+    {
+        var data = _scenario.Get<CandidateData>("CandidateData");
+        await LoginPage.NavigateAsync();
+        await LoginPage.LoginAsync(data.Email, data.Password);
+        await Page.WaitForTimeoutAsync(4000);
+        Console.WriteLine($"[RegistrationSteps] Logged in as new account {data.Email} -> {Page.Url}");
+        Assert.That(LoginPage.IsOnLoginPage(), Is.False,
+            $"Newly registered account could not log in. URL: {Page.Url}");
+    }
+
+    [When("the candidate deletes their profile from the profile page")]
+    public async Task WhenCandidateDeletesProfile()
+    {
+        await ProfilePage.NavigateAsync();
+        Assert.That(await ProfilePage.IsDeleteProfileVisibleAsync(), Is.True,
+            "'Delete Profile' button was not found on the candidate profile page");
+        await ProfilePage.DeleteProfileAsync();
+    }
+
+    [Then("the deleted account should no longer be able to log in")]
+    public async Task ThenDeletedAccountCannotLogIn()
+    {
+        var data = _scenario.Get<CandidateData>("CandidateData");
+        await LoginPage.NavigateAsync();
+        await LoginPage.LoginAsync(data.Email, data.Password);
+        await Page.WaitForTimeoutAsync(4000);
+        Console.WriteLine($"[RegistrationSteps] Re-login attempt after deletion -> {Page.Url}");
+        Assert.That(LoginPage.IsOnLoginPage(), Is.True,
+            $"Deleted account was still able to authenticate — deletion did not take effect. URL: {Page.Url}");
     }
 }

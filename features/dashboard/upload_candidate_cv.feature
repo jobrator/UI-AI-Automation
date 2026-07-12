@@ -56,3 +56,38 @@ Feature: Upload Candidate CV
       When the candidate hovers on the uploaded CV and clicks the delete icon
       And the candidate clicks the Delete button to confirm deletion
       Then the CV should no longer appear in the list
+
+    @pending @profile @positive @requires-login @TC056
+    Scenario: TC056 — Share uploaded CV via LinkedIn from CV manager
+      Given the candidate has an uploaded CV visible in the CV manager
+      When the candidate scrolls to the share section on the right side of the dashboard
+      And the candidate clicks the LinkedIn share icon
+      Then the candidate should be redirected to the LinkedIn sharing page
+      And the CV should be available for sharing with desired contacts on LinkedIn
+
+    @pending @profile @positive @requires-login @TC057
+    Scenario: TC057 — Only LinkedIn is available as a CV sharing option
+      Given the candidate has an uploaded CV visible in the CV manager
+      When the candidate scrolls to the share section on the right side of the dashboard
+      Then only the LinkedIn social media icon should be visible in the share section
+      And no other social media sharing icons should be displayed
+
+    @pending @profile @positive @requires-login @TC058
+    Scenario: TC058 — Download uploaded CV in PDF format
+      Given the candidate has an uploaded CV visible in the CV manager
+      When the candidate hovers on the uploaded CV and opens the download format picker
+      And the candidate selects "PDF" as the download format
+      Then the CV should be downloaded as a PDF file
+      When the candidate hovers on the uploaded CV and clicks the delete icon
+      And the candidate clicks the Delete button to confirm deletion
+      Then the CV should no longer appear in the list
+
+    @pending @profile @positive @requires-login @TC059
+    Scenario: TC059 — Download uploaded CV in DOC format
+      Given the candidate has an uploaded CV visible in the CV manager
+      When the candidate hovers on the uploaded CV and opens the download format picker
+      And the candidate selects "DOC" as the download format
+      Then the CV should be downloaded as a DOC file
+      When the candidate hovers on the uploaded CV and clicks the delete icon
+      And the candidate clicks the Delete button to confirm deletion
+      Then the CV should no longer appear in the list

@@ -1,0 +1,153 @@
+import { Page } from 'playwright';
+import { BasePage } from './BasePage';
+
+/**
+ * SavedJobsPage — Page Object for /dashboard/saved-jobs
+ */
+export class SavedJobsPage extends BasePage {
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  Locators
+  // ══════════════════════════════════════════════════════════════════════════
+
+  private readonly savedJobsList =
+    '.saved-jobs-list, .bookmarked-jobs, [data-testid="saved-jobs-list"], ' +
+    '.shortlisted-jobs, table tbody, [class*="saved-job"]';
+
+  private readonly savedJobEntry =
+    '.saved-job-item, .bookmarked-job-item, [data-testid="saved-job-entry"], ' +
+    'table tbody tr, [class*="saved-job"], .saved-job-card, .shortlisted-item';
+
+  private readonly jobTitleEl =
+    '.job-title, .saved-job-title, a[href*="/job/"], a[href*="/jobs/"], ' +
+    '[data-testid="saved-job-title"], td.title, .position-name';
+
+  private readonly companyNameEl =
+    '.company-name, .employer-name, [data-testid="company-name"], ' +
+    'td.company, [class*="company"], .firm-name';
+
+  private readonly unsaveButton =
+    'button:has-text("Unsave"), button:has-text("Remove"), button.unsave-btn, ' +
+    'a:has-text("Unsave"), button[title*="unsave" i], button[title*="remove" i], ' +
+    '[data-testid="unsave-button"], button:has-text("Delete"), ' +
+    '.bookmark-remove, i.fa-bookmark ~ button, button:has-text("Saved")';
+
+  private readonly applyButton =
+    'button:has-text("Apply"), a:has-text("Apply Now"), a:has-text("Apply"), ' +
+    '.apply-btn, [data-testid="apply-button"], a.btn:has-text("Apply")';
+
+  private readonly emptyState =
+    '.empty-state, [class*="no-result"], [class*="empty"], ' +
+    '*:has-text("No saved jobs"), *:has-text("No jobs saved"), ' +
+    '*:has-text("haven\'t saved"), [data-testid="empty-state"]';
+
+  // ──── Job listing (public page) ──────────────────────────────────────────
+
+  private readonly saveBookmarkIcon =
+    '.save-job, .bookmark-icon, button[title*="save" i], button[title*="bookmark" i], ' +
+    'button.save-btn, [data-testid="save-job"], .fa-bookmark, i.fa-bookmark, ' +
+    'button:has-text("Save"), button:has-text("Bookmark"), .heart-btn, .wishlist-btn';
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  Constructor
+  // ══════════════════════════════════════════════════════════════════════════
+
+  constructor(page: Page) {
+    super(page);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  Navigation
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async navigate(): Promise<void> {
+    await this.lib.navigateTo(this.url('/dashboard/saved-jobs'));
+    await this.page.waitForTimeout(1500);
+  }
+
+  async isLoaded(): Promise<boolean> {
+    await this.page.waitForLoadState('domcontentloaded');
+    return (
+      (await this.lib.isVisible(this.savedJobsList)) ||
+      (await this.lib.isVisible(this.emptyState)) ||
+      (await this.lib.isVisible(this.savedJobEntry))
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  Query methods
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async getSavedJobCount(): Promise<number> {
+    return this.lib.getCount(this.savedJobEntry);
+  }
+
+  async isEmptyStateVisible(): Promise<boolean> {
+    return this.lib.isVisible(this.emptyState);
+  }
+
+  async hasSavedJobs(): Promise<boolean> {
+    const count = await this.getSavedJobCount();
+    return count > 0;
+  }
+
+  async isJobTitleVisible(): Promise<boolean> {
+    return this.lib.isVisible(this.jobTitleEl);
+  }
+
+  async isCompanyNameVisible(): Promise<boolean> {
+    return this.lib.isVisible(this.companyNameEl);
+  }
+
+  async isUnsaveActionVisible(): Promise<boolean> {
+    return this.lib.isVisible(this.unsaveButton);
+  }
+
+  async isApplyActionVisible(): Promise<boolean> {
+    return this.lib.isVisible(this.applyButton);
+  }
+
+  async isJobPresent(title?: string): Promise<boolean> {
+    if (title) {
+      return this.lib.isVisible(`*:has-text("${title}")`);
+    }
+    return this.hasSavedJobs();
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  Actions
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async clickUnsaveFirst(): Promise<void> {
+    const countBefore = await this.getSavedJobCount();
+    await this.lib.click(this.unsaveButton);
+    await this.page.waitForTimeout(1500);
+    // Confirm count decreased or empty state appeared
+    const countAfter = await this.getSavedJobCount();
+    if (countAfter >= countBefore) {
+      console.warn('[SavedJobsPage] Unsave click did not reduce the job count');
+    }
+  }
+
+  /**
+   * Navigate to the public /jobs page and click the save icon on the first job card.
+   */
+  async navigateToJobsAndSaveFirst(): Promise<void> {
+    await this.lib.navigateTo(this.url('/jobs'));
+    await this.page.waitForTimeout(1500);
+    await this.lib.click(this.saveBookmarkIcon);
+    await this.page.waitForTimeout(1000);
+  }
+
+  async clickSaveBookmarkIcon(): Promise<void> {
+    await this.lib.click(this.saveBookmarkIcon);
+    await this.page.waitForTimeout(1000);
+  }
+
+  async isSavedConfirmationVisible(): Promise<boolean> {
+    const confirmSelector =
+      '.alert-success, .toast-success, .swal2-success, [class*="success"], ' +
+      '*:has-text("saved"), *:has-text("bookmarked"), [role="alert"]';
+    return this.lib.isVisible(confirmSelector);
+  }
+}

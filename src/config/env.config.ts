@@ -12,6 +12,11 @@ export interface EnvConfiguration {
   // Credentials
   candidateEmail: string;
   candidatePassword: string;
+  employerEmail: string;
+  employerPassword: string;
+  adminUrl: string;
+  adminEmail: string;
+  adminPassword: string;
 
   // Browser
   browser: 'chromium' | 'firefox' | 'webkit';
@@ -52,6 +57,11 @@ export class EnvConfig {
       jobratorSite: this.requireEnv('JOBRATOR_SITE'),
       candidateEmail: this.requireEnv('CANDIDATE_EMAIL'),
       candidatePassword: this.requireEnv('CANDIDATE_PASSWORD'),
+      employerEmail: process.env.EMPLOYER_EMAIL || '',
+      employerPassword: process.env.EMPLOYER_PASSWORD || '',
+      adminUrl: process.env.ADMIN_URL || 'https://jobrator.com/admin',
+      adminEmail: process.env.ADMIN_EMAIL || '',
+      adminPassword: process.env.ADMIN_PASSWORD || '',
 
       browser: (process.env.BROWSER as EnvConfiguration['browser']) || 'chromium',
       headless: process.env.HEADLESS !== 'false',
@@ -130,6 +140,11 @@ export class EnvConfig {
   public get jobratorSite(): string { return this._config.jobratorSite; }
   public get candidateEmail(): string { return this._config.candidateEmail; }
   public get candidatePassword(): string { return this._config.candidatePassword; }
+  public get employerEmail(): string { return this._config.employerEmail; }
+  public get employerPassword(): string { return this._config.employerPassword; }
+  public get adminUrl(): string { return this._config.adminUrl; }
+  public get adminEmail(): string { return this._config.adminEmail; }
+  public get adminPassword(): string { return this._config.adminPassword; }
   public get browser(): EnvConfiguration['browser'] { return this._config.browser; }
   public get headless(): boolean { return this._config.headless; }
   public get slowMo(): number { return this._config.slowMo; }
