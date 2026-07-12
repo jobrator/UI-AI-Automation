@@ -41,6 +41,19 @@ Feature: Public Homepage
     And the footer should contain a link to the Contact page
     And the footer should contain a link to the About page
 
+  @regression @positive @TC_PUB009
+  Scenario Outline: TC_PUB009 — Footer text button "<link>" navigates to its destination page
+    When the user clicks the "<link>" link in the footer
+    Then the browser should navigate to a page whose URL matches "<url_pattern>"
+
+    Examples:
+      | link               | url_pattern |
+      | About Us           | about       |
+      | Contact Us         | contact     |
+      | Cookie Policy      | cookie      |
+      | Privacy Policy     | privacy     |
+      | Terms & Conditions | terms       |
+
   @smoke @positive @regression @TC_PUB005
   Scenario: TC_PUB005 — Login or Register CTA navigates to the login page
     When the user clicks the login or register link in the navigation

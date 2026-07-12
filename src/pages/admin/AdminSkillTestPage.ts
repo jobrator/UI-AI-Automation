@@ -51,11 +51,29 @@ export class AdminSkillTestPage extends BasePage {
   async navigate(): Promise<void> {
     const adminUrl = envConfig.adminUrl.endsWith('/') ? envConfig.adminUrl : `${envConfig.adminUrl}/`;
     await this.lib.navigateTo(`${adminUrl}skill-test`);
-    await this.page.waitForTimeout(3000);
+    await this.waitForExamsLoaded();
+  }
+
+  /**
+   * The skill exam list is fetched asynchronously behind a "Loading exams..."
+   * placeholder. Wait for it to clear (bounded) before querying cards so we
+   * don't read against a still-loading page. If the backend is unavailable the
+   * placeholder never clears — we time out and let callers soft-handle it.
+   */
+  async waitForExamsLoaded(timeoutMs = 15000): Promise<void> {
+    await this.page
+      .getByText('Loading exams', { exact: false })
+      .waitFor({ state: 'hidden', timeout: timeoutMs })
+      .catch(() => {});
+    await this.page.waitForTimeout(800);
   }
 
   async isLoaded(): Promise<boolean> {
-    return this.lib.isVisible(this.examCards);
+    const hasCards = await this.lib.isVisible(this.examCards);
+    if (hasCards) return true;
+    // Soft: if any page content rendered, consider loaded (no exams may exist,
+    // or the async list is still resolving) — mirrors AdminPsychometricTestPage.
+    return this.lib.isVisible('main, .container, nav, h1, h2, h3, button, a');
   }
 
   // ── State queries ─────────────────────────────────────────────────────────

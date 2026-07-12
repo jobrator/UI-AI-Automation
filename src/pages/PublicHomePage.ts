@@ -129,6 +129,22 @@ export class PublicHomePage extends BasePage {
     return this.lib.isVisible(selector);
   }
 
+  /**
+   * Click a footer link by its visible text label and wait for the
+   * resulting navigation to settle. Handles the abbreviated form too
+   * (e.g. "About Us" → "About") in case the footer uses a shorter label.
+   */
+  async clickFooterLink(text: string): Promise<void> {
+    const short = text.split(/\s+/)[0]; // "About Us" → "About", "Terms & Conditions" → "Terms"
+    const selector =
+      `footer a:has-text("${text}"), [class*="footer"] a:has-text("${text}"), ` +
+      `[role="contentinfo"] a:has-text("${text}"), ` +
+      `footer a:has-text("${short}"), [class*="footer"] a:has-text("${short}"), ` +
+      `[role="contentinfo"] a:has-text("${short}")`;
+    await this.lib.click(selector);
+    await this.page.waitForLoadState('domcontentloaded');
+  }
+
   /** Check whether a footer link with the given text is visible */
   async isFooterLinkVisible(text: string): Promise<boolean> {
     const selector =

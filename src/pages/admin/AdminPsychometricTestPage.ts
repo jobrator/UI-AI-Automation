@@ -47,7 +47,22 @@ export class AdminPsychometricTestPage extends BasePage {
   async navigate(): Promise<void> {
     const adminUrl = envConfig.adminUrl.endsWith('/') ? envConfig.adminUrl : `${envConfig.adminUrl}/`;
     await this.lib.navigateTo(`${adminUrl}psychometric-test`);
-    await this.page.waitForTimeout(3000);
+    await this.waitForExamsLoaded();
+  }
+
+  /**
+   * The exam list is fetched asynchronously and the page renders a
+   * "Loading exams..." placeholder until the request resolves. Wait for that
+   * placeholder to clear (bounded) before querying cards, otherwise counts are
+   * captured against a still-loading page. If the backend is unavailable the
+   * placeholder never clears — we time out and let callers soft-handle it.
+   */
+  async waitForExamsLoaded(timeoutMs = 15000): Promise<void> {
+    await this.page
+      .getByText('Loading exams', { exact: false })
+      .waitFor({ state: 'hidden', timeout: timeoutMs })
+      .catch(() => {});
+    await this.page.waitForTimeout(800);
   }
 
   async isLoaded(): Promise<boolean> {

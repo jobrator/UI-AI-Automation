@@ -89,3 +89,19 @@ Feature: End-to-End Job Application Journey
     Then the application should display the "Shortlisted" status
     When the employer logs in and navigates to the All Applicants page
     Then the candidate's application should display the "Shortlisted" status
+
+  # ─────────────────────────────────────────────────────────────────────────
+  #  Journey 5: Duplicate-application guard — Apply For Job button becomes Applied
+  # This journey validates that once a candidate has applied to a job, revisiting
+  # that same job's detail page shows an "Applied" state instead of an actionable
+  # "Apply For Job" button, preventing duplicate applications.
+  # ─────────────────────────────────────────────────────────────────────────
+
+  @regression @TC_J005
+  Scenario: TC_J005 — Apply For Job button changes to Applied when the same candidate has already applied
+    Given the employer creates a new job posting
+    And the admin approves the job posting
+    And the candidate applies for the approved job
+    When the candidate searches for the same job on the jobs listing page
+    And the candidate opens the searched job's detail page
+    Then the Apply For Job button should show Applied
