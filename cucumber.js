@@ -68,6 +68,29 @@ module.exports = {
     tags: '@security and not @skip'
   },
 
+  // ── Mobile (Appium) ───────────────────────────────────────────────────
+  // Separate support tree: the mobile suite has its own World (Appium session)
+  // and hooks, so it must NOT load the Playwright world/steps.
+  mobile: {
+    requireModule: ['ts-node/register'],
+    require: [
+      'src/mobile/support/mobile.world.ts',
+      'src/mobile/hooks/mobile.hooks.ts',
+      'src/mobile/steps/**/*.ts'
+    ],
+    paths: ['features/mobile/**/*.feature'],
+    format: [
+      'progress-bar',
+      'json:reports/mobile/cucumber-report.json',
+      'html:reports/mobile/cucumber-report.html',
+      'rerun:reports/mobile/@rerun.txt'
+    ],
+    formatOptions: { snippetInterface: 'async-await' },
+    // Appium serves one session per device — parallelism needs one device each.
+    parallel: parseInt(process.env.MOBILE_PARALLEL || '1', 10),
+    tags: process.env.MOBILE_TAGS || 'not @skip'
+  },
+
   // ── Re-run previously failed tests ────────────────────────────────────
   rerun: {
     ...common,
