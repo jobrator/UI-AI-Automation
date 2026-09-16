@@ -38,26 +38,24 @@ Given('the employer has at least one published job',
       );
       const postJobPage = new PostJobPage(this.page);
       await postJobPage.navigate();
-      const loaded = await postJobPage.isLoaded();
-      if (!loaded) {
-        console.warn('[ManageJobs] Post job form did not load — cannot create a job. Skipping.');
-        return pending();
-      }
+      expect(
+        await postJobPage.isLoaded(),
+        'Post A Job form should load so a published job can be created'
+      ).toBeTruthy();
       const uniqueTitle = `Automation Test Job ${Date.now()}`;
       await postJobPage.fillRequiredFields({
         title: uniqueTitle,
         description: 'Automation test job for manage jobs scenarios.',
-        location: 'London, UK',
+        location: 'London, United Kingdom',
         salary: '40000',
       });
       await postJobPage.clickPublish();
       (this as any).publishedJobTitle = uniqueTitle;
       await manageJobsPage.navigate();
-      const hasJobsNow = await manageJobsPage.hasJobs();
-      if (!hasJobsNow) {
-        console.warn('[ManageJobs] Still no jobs after attempting to publish. Skipping scenario.');
-        return pending();
-      }
+      expect(
+        await manageJobsPage.hasJobs(),
+        `Job "${uniqueTitle}" should be listed in Manage Jobs after publishing`
+      ).toBeTruthy();
     }
     const firstTitle = await manageJobsPage.getFirstJobTitle();
     (this as any).existingJobTitle = firstTitle;
@@ -74,22 +72,30 @@ Given('the employer has at least one job saved as a draft',
     }
     const hasDrafts = await manageJobsPage.hasDraftJobs();
     if (!hasDrafts) {
-      console.warn(
-        '[ManageJobs] No draft jobs found. Attempting to save a draft job...'
-      );
+      this.logMessage('[ManageJobs] No draft jobs found — creating one via "Publish Later".');
       const postJobPage = new PostJobPage(this.page);
       await postJobPage.navigate();
-      const loaded = await postJobPage.isLoaded();
-      if (!loaded) {
-        console.warn('[ManageJobs] Post job form did not load — cannot create draft. Skipping.');
-        return pending();
-      }
+      expect(
+        await postJobPage.isLoaded(),
+        'Post A Job form should load so a draft job can be created'
+      ).toBeTruthy();
       const draftTitle = `Draft Test Job ${Date.now()}`;
-      // Fill title only (partial)
-      await this.page.locator(postJobPage.titleField).first().fill(draftTitle);
+      // "Publish Later" is the live draft action and it runs full validation, so
+      // the whole required set has to be filled — the record becomes a draft
+      // (isDraft=true) because of the action used, not because data is missing.
+      await postJobPage.fillRequiredFields({
+        title: draftTitle,
+        description: 'Draft job created by the automation suite for manage-jobs scenarios.',
+        location: 'London, United Kingdom',
+        salary: '40000',
+      });
       (this as any).draftJobTitle = draftTitle;
       await postJobPage.clickSaveDraft();
       await manageJobsPage.navigate();
+      expect(
+        await manageJobsPage.hasDraftJobs(),
+        `Draft job "${draftTitle}" should be listed with Draft status in Manage Jobs`
+      ).toBeTruthy();
     }
     this.logMessage('[ManageJobs] Employer has at least one draft job.');
   }
@@ -181,31 +187,40 @@ When('the employer updates the job description with {string}',
 
 When('the employer clicks the Save button on the edit form',
   async function (this: CustomWorld) {
+    // The edit form is the Post-Job form in edit mode; its submit control may be
+    // "Update", "Save", "Publish", or "Update Job".
     const saveBtn =
-      'button[type="submit"]:has-text("Save"), button:has-text("Update"), ' +
-      'button:has-text("Save"), input[type="submit"][value*="Save"]';
-    const all = await this.page.locator(saveBtn).all();
-    for (const loc of all) {
-      if (await loc.isVisible()) {
-        await loc.click();
-        await this.page.waitForTimeout(2000);
-        return;
-      }
+      'button[type="submit"]:has-text("Update"), button:has-text("Update Job"), ' +
+      'button:has-text("Update"), button[type="submit"]:has-text("Save"), ' +
+      'button:has-text("Save Changes"), button:has-text("Save"), ' +
+      'button:has-text("Publish"), input[type="submit"][value*="Save"], input[type="submit"][value*="Update"]';
+    const loc = this.page.locator(saveBtn).filter({ visible: true }).first();
+    if (await loc.count().catch(() => 0)) {
+      await loc.click().catch(() => {});
+      await this.page.waitForTimeout(2000);
+      this.logMessage(`[ManageJobs] Clicked Save/Update on edit form → ${this.page.url()}`);
+      return;
     }
-    // Fallback
-    await this.page.locator(saveBtn).first().click({ force: true });
-    await this.page.waitForTimeout(2000);
-    this.logMessage(`[ManageJobs] Clicked Save on edit form → ${this.page.url()}`);
+    console.warn('[ManageJobs] No Save/Update button found on the edit form.');
+    await this.page.waitForTimeout(500);
   }
 );
 
 When('the employer deactivates the job from the manage jobs page',
+  { timeout: 120000 },
   async function (this: CustomWorld) {
     const manageJobsPage = getPage(this);
+    // The Manage Jobs list itself has only View / Edit / Delete. The product's
+    // deactivation control is the "Job Status" select on the Edit Job form
+    // (select[name="isDraft"], 0 = Publish / 1 = Draft), so drive that.
     const title = await manageJobsPage.getFirstJobTitle();
     (this as any).deactivatedJobTitle = title;
-    await manageJobsPage.clickDeactivateFirst();
-    this.logMessage(`[ManageJobs] Deactivated job: "${title}"`);
+    const changed = await manageJobsPage.deactivateJobViaEditForm(title);
+    expect(
+      changed,
+      'The Edit Job form should expose a Job Status control for deactivating a job'
+    ).toBeTruthy();
+    this.logMessage(`[ManageJobs] Set job "${title}" to Draft via the Job Status control.`);
   }
 );
 

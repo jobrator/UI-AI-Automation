@@ -115,8 +115,14 @@ Then('the skills multi-select field should be visible on the profile page',
 
 When('the candidate updates the phone number field with a valid phone number',
   async function (this: CustomWorld) {
+    const profilePage = getProfilePage(this);
+    // The live form only persists a change once its required fields (Address +
+    // the Achievement/Objectives/Summary editors) are present. Complete them so
+    // the phone update actually saves rather than being silently rejected.
+    await profilePage.ensureRequiredProfileFieldsFilled();
     const phone = `080${Math.floor(10000000 + Math.random() * 90000000)}`;
-    await getProfilePage(this).updatePhone(phone);
+    scenarioData.set(getScenarioKey(this), { phone });
+    await profilePage.updatePhone(phone);
     this.logMessage(`[Profile] Phone updated to: ${phone}`);
   }
 );
@@ -136,10 +142,19 @@ Then('a success message should be displayed on the profile page',
 
 Then('the updated phone number should be persisted on the profile page',
   async function (this: CustomWorld) {
-    // Reload the page and check the field still has a value
+    const storedPhone = scenarioData.get(getScenarioKey(this))?.phone ?? '';
+    // Reload the page and confirm the save round-tripped through the backend.
+    // We assert a real phone value survived the reload rather than an exact match:
+    // the candidate account is shared, so pinning the exact digits would be brittle
+    // if another scenario updates the same field. Cross-session exact-match is
+    // covered by TC_CP009.
     await getProfilePage(this).navigate();
     const phone = await getProfilePage(this).getPhoneFieldValue();
-    expect(phone.length, 'Phone number field is empty after save — data was not persisted').toBeGreaterThan(0);
+    this.logMessage(`[Profile] Saved phone: "${storedPhone}", found after reload: "${phone}"`);
+    expect(
+      /\d{7,}/.test(phone),
+      `Expected a phone number to persist after save but found "${phone}"`
+    ).toBeTruthy();
   }
 );
 
@@ -250,7 +265,16 @@ When('the candidate clicks the Generate via AI button on the profile summary sec
 
 Then('an AI-generated career summary should be populated in the summary field',
   async function (this: CustomWorld) {
-    const populated = await getProfilePage(this).isSummaryPopulated();
+    const profilePage = getProfilePage(this);
+    // AI generation is subscription-gated on the live site. The candidate account
+    // is kept on Jobrator Plus by `npm run seed:full`, so a "Subscription
+    // Required" dialog here means the subscription lapsed, not a product defect.
+    expect(
+      await profilePage.isAiSubscriptionGated(),
+      'AI summary generation should not be subscription-gated — the candidate account ' +
+      'must hold an active Jobrator Plus plan (re-run `npm run seed:full`).'
+    ).toBeFalsy();
+    const populated = await profilePage.isSummaryPopulated();
     expect(
       populated,
       'Expected the AI-generated summary to populate the summary field but it is empty'
@@ -305,9 +329,13 @@ Then('validation errors should appear on the required fields',
 
 When('the candidate updates the phone number field with a unique valid phone number',
   async function (this: CustomWorld) {
+    const profilePage = getProfilePage(this);
+    // Complete the required profile fields first so the save persists across the
+    // logout/login round-trip instead of being rejected by client-side validation.
+    await profilePage.ensureRequiredProfileFieldsFilled();
     const phone = `0801${Date.now().toString().slice(-7)}`;
     scenarioData.set(getScenarioKey(this), { phone });
-    await getProfilePage(this).updatePhone(phone);
+    await profilePage.updatePhone(phone);
     this.logMessage(`[Profile] Unique phone set to: ${phone}`);
     await this.attach(`Stored phone: ${phone}`, 'text/plain');
   }

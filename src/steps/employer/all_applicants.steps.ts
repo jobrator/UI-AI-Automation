@@ -31,14 +31,12 @@ Given('the employer has at least one candidate application',
       await allApplicantsPage.navigate();
     }
     const hasApplicants = await allApplicantsPage.hasApplicants();
-    if (!hasApplicants) {
-      console.warn(
-        '[AllApplicants] No candidate applications found. ' +
-        'This scenario requires candidates to have applied to the employer\'s jobs. ' +
-        'Please run the job application journey first.'
-      );
-      return pending();
-    }
+    expect(
+      hasApplicants,
+      'Employer should have at least one candidate application. ' +
+      'Applications are seeded by `npm run seed:full` (candidate applies to an employer job) — ' +
+      'run it if this fails.'
+    ).toBeTruthy();
     this.logMessage(`[AllApplicants] Employer has ${await allApplicantsPage.getApplicantCount()} application(s).`);
   }
 );
@@ -51,13 +49,11 @@ Given('the employer has at least one candidate application with Pending status',
       await allApplicantsPage.navigate();
     }
     const hasPending = await allApplicantsPage.hasPendingApplications();
-    if (!hasPending) {
-      console.warn(
-        '[AllApplicants] No applications with "Pending" status found. ' +
-        'This scenario requires at least one application in Pending state.'
-      );
-      return pending();
-    }
+    expect(
+      hasPending,
+      'Employer should have at least one application in Pending status ' +
+      '(seeded by `npm run seed:full`; a fresh application is created with status "Pending").'
+    ).toBeTruthy();
     this.logMessage('[AllApplicants] Employer has at least one application with Pending status.');
   }
 );
@@ -70,18 +66,16 @@ Given('the employer has at least one application where the candidate has uploade
       await allApplicantsPage.navigate();
     }
     const hasApplicants = await allApplicantsPage.hasApplicants();
-    if (!hasApplicants) {
-      console.warn('[AllApplicants] No candidate applications found — cannot check for CV uploads. Skipping.');
-      return pending();
-    }
+    expect(
+      hasApplicants,
+      'Employer should have at least one candidate application (seeded by `npm run seed:full`).'
+    ).toBeTruthy();
     const downloadAvailable = await allApplicantsPage.isDownloadAvailable();
-    if (!downloadAvailable) {
-      console.warn(
-        '[AllApplicants] No CV download option found for any application. ' +
-        'This scenario requires a candidate who has uploaded a CV.'
-      );
-      return pending();
-    }
+    expect(
+      downloadAvailable,
+      'At least one application should expose a "View CV" / CV download action — ' +
+      'the seeded application attaches an uploaded CV to the candidate.'
+    ).toBeTruthy();
     this.logMessage('[AllApplicants] At least one application has a downloadable CV.');
   }
 );
@@ -224,20 +218,27 @@ Then('the application status should be updated to {string}',
       await allApplicantsPage.navigate();
       await this.page.waitForTimeout(1000);
     }
-    const currentStatus = await allApplicantsPage.getFirstApplicationStatus();
-    const statusMatches = currentStatus.toLowerCase().includes(expectedStatus.toLowerCase());
-    if (!statusMatches) {
-      // Check for success message instead (some apps show toast then revert UI)
+    // Poll with reloads — the status change can lag before it surfaces in the list.
+    let currentStatus = '';
+    let statusMatches = false;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      currentStatus = await allApplicantsPage.getFirstApplicationStatus();
+      statusMatches = currentStatus.toLowerCase().includes(expectedStatus.toLowerCase());
       const successSel =
         '.alert-success, [class*="success"], .toast-success, ' +
         `[class*="status"]:has-text("${expectedStatus}")`;
       const successVisible = await this.page.locator(successSel).first().isVisible().catch(() => false);
-      expect(
-        successVisible || statusMatches,
-        `Application status should be updated to "${expectedStatus}" but found: "${currentStatus}"`
-      ).toBeTruthy();
+      if (statusMatches || successVisible) {
+        this.logMessage(`[AllApplicants] Application status updated to "${expectedStatus}".`);
+        return;
+      }
+      await allApplicantsPage.navigate();
+      await this.page.waitForTimeout(1500);
     }
-    this.logMessage(`[AllApplicants] Application status: expected="${expectedStatus}", actual="${currentStatus}"`);
+    expect(
+      currentStatus.toLowerCase(),
+      `Application status should be "${expectedStatus}" after the employer changed it`
+    ).toContain(expectedStatus.toLowerCase());
   }
 );
 

@@ -70,7 +70,9 @@ export class PostJobPage extends BasePage {
     'button:has-text("Publish"), button[type="submit"]:has-text("Publish"), ' +
     'input[type="submit"][value*="Publish"], [data-testid="publish-button"]';
 
+  // The live form's draft control is labelled "Publish Later".
   readonly saveDraftButton =
+    'button:has-text("Publish Later"), a:has-text("Publish Later"), ' +
     'button:has-text("Draft"), button:has-text("Save as Draft"), button:has-text("Save Draft"), ' +
     '[data-testid="save-draft-button"], a:has-text("Save as Draft")';
 
@@ -171,16 +173,11 @@ export class PostJobPage extends BasePage {
       Promise.race([fn(), new Promise<void>((_, r) => setTimeout(() => r(new Error('fill timeout')), ms))]).catch(() => {});
 
     await withTimeout(() => this.lib.fill(this.titleField, data.title));
-    await withTimeout(async () => {
-      const descLoc = this.page.locator('.public-DraftEditor-content[contenteditable="true"]').first();
-      if (await descLoc.isVisible().catch(() => false)) {
-        await descLoc.click();
-        await this.page.waitForTimeout(300);
-        await descLoc.fill(data.description);
-      } else {
-        await this.lib.fill(this.descriptionField, data.description);
-      }
-    });
+    // The live form renders FIVE DraftJS editors — Company Information, Contact
+    // Information, Benefits, "Duties and Responsibilities *" and "Job Description *".
+    // The last two are required, and validation fails silently when they are empty,
+    // so fill every editor rather than only the first one.
+    await withTimeout(() => this.fillAllRichTextEditors(data.description), 30000);
     await withTimeout(() => this.lib.fill(this.locationField, data.location));
 
     if (data.salary) {
@@ -231,33 +228,86 @@ export class PostJobPage extends BasePage {
       }
     } catch { /* skip */ }
 
-    // Select employment type — try select first, then radio button
-    const empTypeSelected = await this.selectFirstDropdownOption(this.employmentTypeDropdown);
-    if (!empTypeSelected) {
-      try {
-        const radio = this.page.locator('input[type="radio"][name="jobType"], input[type="radio"][name="employment_type"]').first();
-        if (await radio.isVisible().catch(() => false)) {
-          await radio.check({ timeout: 5000 }).catch(() => {});
-        } else {
-          const ftRadio = this.page.locator('label:has-text("Full-time") input[type="radio"]').first();
-          if (await ftRadio.isVisible().catch(() => false)) await ftRadio.check({ timeout: 5000 }).catch(() => {});
+    // Currency (required <select name="currency">) — pick the first real option.
+    try {
+      const currency = this.page.locator('select[name="currency"]').first();
+      if (await currency.isVisible().catch(() => false)) {
+        const opts = await currency.locator('option').all();
+        for (const opt of opts) {
+          const val = await opt.getAttribute('value');
+          if (val && val !== '' && val !== '0') { await currency.selectOption({ value: val }); break; }
         }
-      } catch { /* skip */ }
-    }
+      }
+    } catch { /* skip */ }
 
-    // Select work mode — try select first, then radio button
-    const workModeSelected = await this.selectFirstDropdownOption(this.workModeDropdown);
-    if (!workModeSelected) {
-      try {
-        const radio = this.page.locator('input[type="radio"][name="workMode"], input[type="radio"][name="work_mode"]').first();
-        if (await radio.isVisible().catch(() => false)) {
-          await radio.check({ timeout: 5000 }).catch(() => {});
+    // Skills (required react-select multi-select) — add one skill.
+    await withTimeout(() => this.searchAndSelectSkill('JavaScript'), 10000);
+
+    // Qualification (required react-select) — pick the first suggestion.
+    try {
+      const controls = this.page.locator('.select__control, [class*="select__control"]');
+      const n = await controls.count();
+      if (n > 1) {
+        const qual = controls.nth(1);
+        await qual.click().catch(() => {});
+        await this.page.waitForTimeout(400);
+        const firstOpt = this.page.locator('.select__option, [class*="select__option"]').filter({ visible: true }).first();
+        if (await firstOpt.isVisible({ timeout: 2500 }).catch(() => false)) {
+          await firstOpt.click().catch(() => {});
         } else {
-          const remoteRadio = this.page.locator('label:has-text("Remote") input[type="radio"]').first();
-          if (await remoteRadio.isVisible().catch(() => false)) await remoteRadio.check({ timeout: 5000 }).catch(() => {});
+          await this.page.keyboard.press('Escape').catch(() => {});
         }
-      } catch { /* skip */ }
+      }
+    } catch { /* skip */ }
+
+    // Employment Type & Work Mode are required checkbox groups whose inputs are
+    // visually hidden custom controls. Checking the input directly (even with
+    // force) does not fire React's onChange, so the form still reports
+    // "Please select at least one employment type." — the click has to land on
+    // the <label>.
+    await this.selectEmploymentTypeByLabel('Full-time');
+    await this.selectWorkModeByLabel('Remote');
+  }
+
+  /**
+   * Fill every DraftJS rich-text editor on the form.
+   *
+   * `locator.fill()` does not work on DraftJS (it is a contenteditable driven by
+   * React state), so each editor is clicked and typed into instead.
+   */
+  async fillAllRichTextEditors(text: string): Promise<void> {
+    const editors = this.page.locator('.public-DraftEditor-content[contenteditable="true"]');
+    const count = await editors.count().catch(() => 0);
+    for (let i = 0; i < count; i++) {
+      const editor = editors.nth(i);
+      await editor.scrollIntoViewIfNeeded().catch(() => {});
+      if (!(await editor.isVisible().catch(() => false))) continue;
+      const existing = (await editor.innerText().catch(() => '')).trim();
+      if (existing) continue; // idempotent — don't append on re-entry
+      await editor.click().catch(() => {});
+      await this.page.waitForTimeout(150);
+      await this.page.keyboard.type(text).catch(() => {});
+      await this.page.waitForTimeout(150);
     }
+  }
+
+  /** Tick an Employment Type option by clicking its label. */
+  async selectEmploymentTypeByLabel(label: string): Promise<boolean> {
+    return this.clickCheckboxGroupLabel('employmentTypes', label);
+  }
+
+  /** Tick a Work Mode option by clicking its label. */
+  async selectWorkModeByLabel(label: string): Promise<boolean> {
+    return this.clickCheckboxGroupLabel('workMode', label);
+  }
+
+  private async clickCheckboxGroupLabel(name: string, label: string): Promise<boolean> {
+    const lbl = this.page.locator(`label:has-text("${label}")`).filter({ visible: true }).first();
+    if (!(await lbl.isVisible().catch(() => false))) return false;
+    await lbl.scrollIntoViewIfNeeded().catch(() => {});
+    await lbl.click().catch(() => {});
+    await this.page.waitForTimeout(300);
+    return (await this.page.locator(`input[name="${name}"]:checked`).count().catch(() => 0)) > 0;
   }
 
   private async selectFirstDropdownOption(selector: string): Promise<boolean> {
@@ -295,18 +345,61 @@ export class PostJobPage extends BasePage {
     }
   }
 
+  // Employment Type and Work Mode are checkbox groups on the live form
+  // (name="employmentTypes" / name="workMode"), not <select> dropdowns — there is
+  // nothing to "open". Scroll the group into view so its options are present.
   async openEmploymentTypeDropdown(): Promise<void> {
-    const loc = this.page.locator(this.employmentTypeDropdown).first();
-    await loc.waitFor({ state: 'visible', timeout: 10000 });
-    await loc.click();
-    await this.page.waitForTimeout(500);
+    await this.page
+      .locator('label:has-text("Employment Type"), input[name="employmentTypes"]')
+      .first()
+      .scrollIntoViewIfNeeded()
+      .catch(() => { /* group may render differently; option getters still work */ });
+    await this.page.waitForTimeout(300);
   }
 
   async openWorkModeDropdown(): Promise<void> {
-    const loc = this.page.locator(this.workModeDropdown).first();
-    await loc.waitFor({ state: 'visible', timeout: 10000 });
-    await loc.click();
-    await this.page.waitForTimeout(500);
+    await this.page
+      .locator('label:has-text("Work Mode"), input[name="workMode"]')
+      .first()
+      .scrollIntoViewIfNeeded()
+      .catch(() => { /* group may render differently */ });
+    await this.page.waitForTimeout(300);
+  }
+
+  /** Read the visible option labels of a checkbox group by input name. */
+  private async getCheckboxGroupLabels(name: string): Promise<string[]> {
+    const boxes = await this.page.locator(`input[type="checkbox"][name="${name}"], input[type="radio"][name="${name}"]`).all();
+    const labels: string[] = [];
+    for (const box of boxes) {
+      const txt = await box.evaluate((el) => {
+        const id = el.getAttribute('id');
+        if (id) {
+          const l = document.querySelector(`label[for="${id}"]`);
+          if (l && l.textContent) return l.textContent;
+        }
+        const parentLabel = el.closest('label');
+        if (parentLabel && parentLabel.textContent) return parentLabel.textContent;
+        const sib = el.nextElementSibling;
+        if (sib && sib.textContent) return sib.textContent;
+        return el.parentElement?.textContent ?? '';
+      }).catch(() => '');
+      if (txt.trim()) labels.push(txt.trim());
+    }
+    return labels;
+  }
+
+  /** Employment Type option labels (checkbox group, falling back to a <select>). */
+  async getEmploymentTypeOptions(): Promise<string[]> {
+    const fromSelect = await this.getOptionsInDropdown(this.employmentTypeDropdown).catch(() => []);
+    if (fromSelect.length) return fromSelect;
+    return this.getCheckboxGroupLabels('employmentTypes');
+  }
+
+  /** Work Mode option labels (checkbox group, falling back to a <select>). */
+  async getWorkModeOptions(): Promise<string[]> {
+    const fromSelect = await this.getOptionsInDropdown(this.workModeDropdown).catch(() => []);
+    if (fromSelect.length) return fromSelect;
+    return this.getCheckboxGroupLabels('workMode');
   }
 
   async getOptionsInDropdown(selector: string): Promise<string[]> {
@@ -331,7 +424,35 @@ export class PostJobPage extends BasePage {
   }
 
   async searchAndSelectSkill(skill: string): Promise<void> {
-    // Try typing in skills input (may be a typeahead/Select2)
+    // The live Skills field is a react-select multi-select. Click its control,
+    // type into the inner input, then pick the matching .select__option.
+    const control = this.page
+      .locator('.select__control, [class*="select__control"]')
+      .filter({ visible: true })
+      .first();
+    if (await control.isVisible({ timeout: 4000 }).catch(() => false)) {
+      await control.click().catch(() => {});
+      await this.page.waitForTimeout(300);
+      const rsInput = this.page
+        .locator('input[id*="react-select"], .select__control input, [class*="select__control"] input')
+        .filter({ visible: true })
+        .first();
+      await rsInput.fill(skill).catch(async () => { await this.page.keyboard.type(skill); });
+      await this.page.waitForTimeout(900);
+      const option = this.page
+        .locator(`.select__option:has-text("${skill}"), [class*="select__option"]:has-text("${skill}"), [role="option"]:has-text("${skill}")`)
+        .filter({ visible: true })
+        .first();
+      if (await option.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await option.click().catch(() => {});
+      } else {
+        await rsInput.press('Enter').catch(() => {});
+      }
+      await this.page.waitForTimeout(500);
+      return;
+    }
+
+    // Fallback: legacy typeahead / Select2 inputs
     const skillsInputSelectors = [
       'input[placeholder*="skill" i]',
       '.select2-search input',
@@ -372,11 +493,13 @@ export class PostJobPage extends BasePage {
 
   async isSkillTagVisible(skill?: string): Promise<boolean> {
     if (skill) {
-      const sel = `${this.skillTag}:has-text("${skill}"), [class*="tag"]:has-text("${skill}"), [class*="chip"]:has-text("${skill}")`;
+      const sel =
+        `.select__multi-value:has-text("${skill}"), [class*="multi-value"]:has-text("${skill}"), ` +
+        `${this.skillTag}:has-text("${skill}"), [class*="tag"]:has-text("${skill}"), [class*="chip"]:has-text("${skill}")`;
       const count = await this.lib.getCount(sel);
       return count > 0;
     }
-    return this.lib.isVisible(this.skillTag);
+    return this.lib.isVisible(`.select__multi-value, ${this.skillTag}`);
   }
 
   async isPublishSuccessVisible(): Promise<boolean> {

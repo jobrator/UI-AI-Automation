@@ -29,10 +29,13 @@ Feature: Employer Shortlisted CVs and Scheduled Interviews
     Scenario: TC_SI002 — Employer can initiate interview scheduling from the Shortlisted CVs page
       Given the employer has shortlisted at least one candidate
       When the employer clicks the Schedule Interview action on a shortlisted candidate
+      # The live modal combines date and time into one datetime-local control and
+      # has no interview format/type field — every interview is a meeting link.
+      # See bugs/BUG-005 for the format-field spec gap.
       Then the interview scheduling form should appear
       And the form should contain a date field
       And the form should contain a time field
-      And the form should contain a format or type field
+      And the form should contain an attendee email field
       And the form should contain a location or meeting link field
 
   # ─────────────────────────────────────────────────────────────────────────

@@ -49,10 +49,13 @@ Feature: Generate CV with AI
 
   Rule: Unsubscribed candidate sees the subscription prompt when using AI features
 
+    # A throwaway account is registered here on purpose: the shared candidate in
+    # .env holds an active Jobrator Plus plan (needed by Rule 3 and TC_CP006), so
+    # it would never see the Subscription Required prompt.
     Background:
-      Given the authenticated candidate is on the dashboard
+      Given an unsubscribed candidate is registered and logged in
 
-    @regression @positive @requires-login @TC068
+    @regression @positive @TC068
     Scenario: TC068 — Clicking Generate via AI prompts an unsubscribed candidate to subscribe
       When the candidate navigates to the CV builder page directly
       And the candidate clicks the Generate via AI button in the experience section
@@ -61,7 +64,7 @@ Feature: Generate CV with AI
       When the candidate dismisses the subscription modal
       Then the subscription modal should be closed
 
-    @regression @positive @requires-login @TC069
+    @regression @positive @TC069
     Scenario: TC069 — Clicking Write via AI prompts an unsubscribed candidate to subscribe
       When the candidate navigates to the CV builder page directly
       And the candidate clicks the Write via AI button in the about section
@@ -76,9 +79,12 @@ Feature: Generate CV with AI
 
   Rule: Subscribed candidate uses AI to generate CV content
 
+    # Subscribing cannot be done inside a headless test — checkout.paystack.com
+    # puts a Cloudflare human-verification gate in front of the test-card list.
+    # The shared candidate is kept subscribed by `npm run seed:subscription`
+    # (headed, real Chrome) and this Background only asserts the plan is active.
     Background:
-      Given a new candidate is registered and logged in
-      And the candidate subscribes to Jobrator Plus using the Paystack test success card
+      Given the subscribed candidate is logged in
 
     @regression @positive @TC070
     Scenario: TC070 — Subscribed candidate generates an experience description via AI

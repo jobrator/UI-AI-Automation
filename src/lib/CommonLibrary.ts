@@ -82,13 +82,28 @@ export class CommonLibrary {
     return typeof selector === 'string' ? this.page.locator(selector) : selector;
   }
 
+  /**
+   * Resolve a selector to its first *visible* match.
+   *
+   * Responsive Jobrator pages frequently render a hidden mobile copy of a
+   * control alongside the visible desktop copy (same name/placeholder). A plain
+   * `.first()` resolves to the hidden copy, so an ensuing `waitFor({visible})`
+   * times out. Filtering to visible elements first picks the copy the user
+   * actually interacts with. For a selector whose first match is already visible
+   * this is a no-op, so it never changes behaviour for controls that work today.
+   */
+  resolveVisible(selector: string | Locator): Locator {
+    if (typeof selector !== 'string') return selector.first();
+    return this.page.locator(selector).filter({ visible: true }).first();
+  }
+
   // ══════════════════════════════════════════════════════════════════════════
   //  Interactions
   // ══════════════════════════════════════════════════════════════════════════
 
   /** Click an element, waiting for it to be visible and enabled first */
   async click(selector: string | Locator, options?: { force?: boolean; timeout?: number }): Promise<void> {
-    const locator = this.resolve(selector).first();
+    const locator = this.resolveVisible(selector);
     console.log(`[Lib] click → ${selector}`);
     await locator.waitFor({ state: 'visible', timeout: options?.timeout ?? envConfig.defaultTimeout });
     await locator.click({ force: options?.force });
@@ -109,7 +124,7 @@ export class CommonLibrary {
    * The field is cleared first unless `append` is true.
    */
   async fill(selector: string | Locator, value: string, append = false): Promise<void> {
-    const locator = this.resolve(selector).first();
+    const locator = this.resolveVisible(selector);
     await locator.waitFor({ state: 'visible', timeout: envConfig.defaultTimeout });
     if (!append) await locator.clear();
     await locator.fill(value);
@@ -122,7 +137,7 @@ export class CommonLibrary {
 
   /** Type character-by-character (useful for auto-complete / typeahead) */
   async typeSlowly(selector: string | Locator, value: string, delayMs = 80): Promise<void> {
-    const locator = this.resolve(selector);
+    const locator = this.resolveVisible(selector);
     await locator.waitFor({ state: 'visible' });
     await locator.click();
     await locator.clear();
@@ -146,12 +161,12 @@ export class CommonLibrary {
 
   /** Select a dropdown option by visible label */
   async selectOption(selector: string | Locator, label: string): Promise<void> {
-    await this.resolve(selector).selectOption({ label });
+    await this.resolveVisible(selector).selectOption({ label });
   }
 
   /** Select a dropdown option by value attribute */
   async selectOptionByValue(selector: string | Locator, value: string): Promise<void> {
-    await this.resolve(selector).selectOption({ value });
+    await this.resolveVisible(selector).selectOption({ value });
   }
 
   /** Check a checkbox (idempotent — does nothing if already checked) */
@@ -187,12 +202,14 @@ export class CommonLibrary {
 
   /** Get the visible inner text of an element */
   async getText(selector: string | Locator): Promise<string> {
-    return (await this.resolve(selector).innerText()).trim();
+    // Use the first visible match to avoid strict-mode violations when a broad
+    // selector matches several elements (e.g. multiple error containers).
+    return (await this.resolveVisible(selector).innerText()).trim();
   }
 
   /** Get the value attribute of an input element */
   async getInputValue(selector: string | Locator): Promise<string> {
-    return this.resolve(selector).inputValue();
+    return this.resolveVisible(selector).inputValue();
   }
 
   /** Get any HTML attribute of an element */
@@ -209,9 +226,11 @@ export class CommonLibrary {
   //  Visibility / State checks
   // ══════════════════════════════════════════════════════════════════════════
 
-  /** Returns true if the element is visible in the DOM */
+  /** Returns true if a visible match for the selector exists in the DOM */
   async isVisible(selector: string | Locator): Promise<boolean> {
-    return this.resolve(selector).first().isVisible();
+    // Prefer a visible match over a (possibly hidden) first DOM match, so that a
+    // hidden responsive duplicate preceding the real control does not mask it.
+    return this.resolveVisible(selector).isVisible();
   }
 
   /** Returns true if the element is hidden or not in the DOM */

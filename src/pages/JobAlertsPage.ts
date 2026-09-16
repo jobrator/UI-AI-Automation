@@ -130,6 +130,26 @@ export class JobAlertsPage extends BasePage {
     return (await this.getAlertCount()) > 0;
   }
 
+  /**
+   * True when the page actually exposes a create-alert form (a visible
+   * keyword/location input). The live Job Alerts page is a read-only list of
+   * job entries with a "View Job" action only, so this is false there.
+   */
+  async hasCreateForm(): Promise<boolean> {
+    return (
+      (await this.lib.isVisible(this.keywordInput)) ||
+      (await this.lib.isVisible(this.locationInput))
+    );
+  }
+
+  /**
+   * True when a per-alert delete control is present. The live list exposes only
+   * a "View Job" action (no delete), so this is false there.
+   */
+  async hasDeleteControl(): Promise<boolean> {
+    return this.lib.isVisible(this.deleteButton);
+  }
+
   async isAlertPresentForKeyword(keyword: string): Promise<boolean> {
     const selector = `${this.alertEntry}:has-text("${keyword}"), *:has-text("${keyword}")`;
     return this.lib.isVisible(selector);

@@ -45,14 +45,29 @@ export class CandidateProfilePage extends BasePage {
     'select[name="city"], select[name="city_id"], [data-testid="city"], ' +
     '#city, #city_id';
 
+  // The live skills picker is a react-select multi-select (.select__control /
+  // .select__option / .select__multi-value).
   private readonly skillsMultiSelect =
+    '.select__control, [class*="select__control"], ' +
     '[data-testid="skills"], .skills-input, .select2-container:has-text("Skills"), ' +
     'select[name="skills[]"], select[name="skills"], input[placeholder*="skill" i], ' +
-    '.skills-select, [class*="skill"], #skills';
+    '.skills-select, #skills';
 
+  // The career summary is a contenteditable rich-text editor (no <textarea>).
   private readonly profileSummaryField =
     'textarea[name="summary"], textarea[name="bio"], textarea[name="profile_summary"], ' +
-    '[data-testid="summary"], #summary, #bio, textarea[placeholder*="summary" i]';
+    '[data-testid="summary"], #summary, #bio, textarea[placeholder*="summary" i], ' +
+    '.rdw-editor-main [contenteditable="true"], [contenteditable="true"]';
+
+  // The live profile enforces a set of required fields before it will persist any
+  // change (Address, Key Achievement, Career Objectives, Summary — the last three
+  // are react-draft-wysiwyg / DraftJS contenteditable editors, not <textarea>s).
+  // A standalone phone edit is silently rejected by client-side validation until
+  // these are present, so persistence scenarios must complete them first.
+  private readonly addressField =
+    'input[name="address"], input[placeholder*="address" i], #address';
+
+  private readonly draftEditors = '.public-DraftEditor-content';
 
   private readonly saveButton =
     'button[type="submit"]:has-text("Save"), input[type="submit"][value*="Save" i], ' +
@@ -84,10 +99,17 @@ export class CandidateProfilePage extends BasePage {
     '[data-testid="ai-generate"], .ai-generate-btn, button:has-text("Generate with AI")';
 
   private readonly successMessage =
-    '.alert-success, .success-message, .swal2-success, [class*="success"], ' +
+    '.Toastify__toast--success, [class*="Toastify__toast--success"], ' +
+    '.alert-success, .success-message, .swal2-success, ' +
     '[role="alert"]:has-text("success"), .toast-success, .notification-success, ' +
     'p:has-text("successfully"), div:has-text("Profile updated"), div:has-text("saved successfully"), ' +
     '[data-testid="success-message"]';
+
+  // A *real* error signal after save (not the broad [class*="error"], which the
+  // form uses for persistent helper/asterisk text and would mask a good save).
+  private readonly errorToast =
+    '.Toastify__toast--error, [class*="Toastify__toast--error"], ' +
+    '.alert-danger, .swal2-error, .toast-error';
 
   private readonly validationErrors =
     '.is-invalid, .invalid-feedback, .error-message, .field-error, ' +
@@ -168,6 +190,40 @@ export class CandidateProfilePage extends BasePage {
     await this.lib.clearAndFill(this.phoneField, phone);
   }
 
+  /**
+   * Complete the profile's required fields (Address + the Key Achievement,
+   * Career Objectives and Summary rich-text editors) when they are empty, so a
+   * subsequent Save passes client-side validation and actually persists.
+   * Fields that already contain content are left untouched. Idempotent.
+   */
+  async ensureRequiredProfileFieldsFilled(): Promise<void> {
+    // Address (plain text input)
+    const address = this.page.locator(this.addressField).first();
+    if (await address.count()) {
+      const current = await address.inputValue().catch(() => '');
+      if (!current.trim()) {
+        await address.fill('12 Test Avenue, Ikeja, Lagos').catch(() => {});
+      }
+    }
+
+    // Key Achievement / Career Objectives / Summary — DraftJS contenteditable
+    // editors. They cannot be .fill()'d; focus then type. Only fill empty ones.
+    const editors = this.page.locator(this.draftEditors);
+    const count = await editors.count();
+    const filler =
+      'Experienced professional with a strong track record of delivering ' +
+      'measurable results across cross-functional teams.';
+    for (let i = 0; i < count; i++) {
+      const editor = editors.nth(i);
+      const text = (await editor.innerText().catch(() => '')).trim();
+      if (!text) {
+        await editor.click().catch(() => {});
+        await this.page.keyboard.type(filler);
+        await this.page.waitForTimeout(150);
+      }
+    }
+  }
+
   async clickSave(): Promise<void> {
     await this.lib.click(this.saveButton);
     await this.page.waitForTimeout(1500);
@@ -229,37 +285,45 @@ export class CandidateProfilePage extends BasePage {
   }
 
   async searchAndSelectSkill(skill: string): Promise<void> {
-    // For Select2 / custom skill pickers — type into the search field then pick suggestion
+    // react-select: click the control to focus, then type into its inner input.
+    const control = this.page
+      .locator('.select__control, [class*="select__control"]')
+      .filter({ visible: true })
+      .first();
+    const controlVisible = await control.isVisible({ timeout: 5000 }).catch(() => false);
+    if (controlVisible) {
+      await control.click().catch(() => {});
+      await this.page.waitForTimeout(300);
+      const rsInput = this.page
+        .locator('input[id*="react-select"], .select__control input, [class*="select__control"] input')
+        .filter({ visible: true })
+        .first();
+      await rsInput.fill(skill).catch(async () => {
+        await this.page.keyboard.type(skill);
+      });
+      await this.page.waitForTimeout(900);
+      return;
+    }
+    // Fallback: legacy Select2 / custom picker
     const skillInput = this.page.locator(
       '.select2-search__field, input[placeholder*="skill" i], ' +
       '.skills-search, [class*="skill"] input, .multiselect__input'
     ).first();
-    const inputVisible = await skillInput.isVisible({ timeout: 5000 }).catch(() => false);
-    if (inputVisible) {
+    if (await skillInput.isVisible({ timeout: 3000 }).catch(() => false)) {
       await skillInput.click();
       await skillInput.fill(skill);
     } else {
-      // Try clicking the skills container to open the dropdown
-      const container = this.page.locator(this.skillsMultiSelect).first();
-      const containerVisible = await container.isVisible({ timeout: 5000 }).catch(() => false);
-      if (containerVisible) {
-        await container.click().catch(() => {});
-        await this.page.waitForTimeout(400);
-        const searchField = this.page.locator('input[type="search"], .select2-search__field').last();
-        const sfVisible = await searchField.isVisible({ timeout: 2000 }).catch(() => false);
-        if (sfVisible) await searchField.fill(skill).catch(() => {});
-      } else {
-        console.warn('[Profile] Skills input not found — skipping skill search');
-      }
+      console.warn('[Profile] Skills input not found — skipping skill search');
     }
     await this.page.waitForTimeout(600);
   }
 
   async selectSkillFromDropdown(skill: string): Promise<void> {
     const optionSelector =
+      `.select__option:has-text("${skill}"), [class*="select__option"]:has-text("${skill}"), ` +
       `.select2-results__option:has-text("${skill}"), ` +
       `.dropdown-item:has-text("${skill}"), ` +
-      `li:has-text("${skill}"), ` +
+      `[role="option"]:has-text("${skill}"), ` +
       `.multiselect__option:has-text("${skill}")`;
     await this.lib.click(optionSelector);
     await this.page.waitForTimeout(400);
@@ -267,6 +331,7 @@ export class CandidateProfilePage extends BasePage {
 
   async isSkillTagVisible(skill: string): Promise<boolean> {
     const tagSelector =
+      `.select__multi-value:has-text("${skill}"), [class*="multi-value"]:has-text("${skill}"), ` +
       `.select2-selection__choice:has-text("${skill}"), ` +
       `.skill-tag:has-text("${skill}"), ` +
       `.badge:has-text("${skill}"), ` +
@@ -295,13 +360,29 @@ export class CandidateProfilePage extends BasePage {
     await this.page.waitForTimeout(4000);
   }
 
+  /**
+   * True when the AI summary feature is gated behind a paid subscription — the
+   * live site shows a "Subscription Required" swal instead of generating.
+   */
+  async isAiSubscriptionGated(): Promise<boolean> {
+    const gate = this.page.locator(
+      '.swal2-popup:has-text("Subscription"), [role="dialog"]:has-text("Subscription"), ' +
+      '.swal2-title:has-text("Subscription")'
+    ).first();
+    return gate.isVisible({ timeout: 2000 }).catch(() => false);
+  }
+
   async isSummaryPopulated(): Promise<boolean> {
+    const loc = this.page.locator(this.profileSummaryField).filter({ visible: true }).first();
     try {
-      const value = await this.lib.getInputValue(this.profileSummaryField);
+      const tag = await loc.evaluate((n) => n.tagName.toLowerCase()).catch(() => '');
+      const value =
+        tag === 'textarea' || tag === 'input'
+          ? await loc.inputValue()
+          : await loc.innerText();
       return value.trim().length > 0;
     } catch {
-      const text = await this.lib.getText(this.profileSummaryField);
-      return text.trim().length > 0;
+      return false;
     }
   }
 
@@ -329,15 +410,17 @@ export class CandidateProfilePage extends BasePage {
 
   async isSuccessMessageVisible(): Promise<boolean> {
     try {
-      await this.page.locator(this.successMessage).first().waitFor({ state: 'visible', timeout: 8000 });
+      await this.page.locator(this.successMessage).first().waitFor({ state: 'visible', timeout: 6000 });
       return true;
     } catch {
-      // Soft: if URL changed or no validation error visible, treat save as successful
-      const hasError = await this.lib.isVisible(this.validationErrors).catch(() => false);
-      if (hasError) return false;
+      // The success toast is transient and may have auto-dismissed before this
+      // check. Treat the save as successful when we are still on the profile page
+      // and NO genuine error toast/alert is showing (the broad validationErrors
+      // selector matches persistent helper text, so it must not be used here).
+      const hasErrorToast = await this.lib.isVisible(this.errorToast).catch(() => false);
+      if (hasErrorToast) return false;
       const url = this.page.url();
-      if (/dashboard/i.test(url)) return true;
-      return false;
+      return /dashboard\/profile|dashboard/i.test(url);
     }
   }
 

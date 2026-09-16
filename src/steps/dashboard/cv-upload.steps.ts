@@ -99,6 +99,9 @@ When('the candidate hovers on the uploaded CV and clicks the download icon',
 
 When('the candidate hovers on the uploaded CV and clicks the delete icon',
   async function (this: CustomWorld) {
+    // Record the CV count so the removal check can confirm a decrease even when
+    // other (pre-existing) CVs remain in the list.
+    (this as any).cvCountBeforeDelete = await getCvPage(this).getCvCount();
     await getCvPage(this).hoverAndClickDelete();
   }
 );
@@ -171,6 +174,14 @@ Then('the CV should no longer appear in the list',
   async function (this: CustomWorld) {
     // Give the DOM time to update after deletion
     await this.page.waitForTimeout(1500);
+    const before: number | undefined = (this as any).cvCountBeforeDelete;
+    const after = await getCvPage(this).getCvCount();
+    if (typeof before === 'number') {
+      // The just-uploaded CV was removed even if other pre-existing CVs remain.
+      expect(after, `Expected the CV count to drop after deletion (before=${before}, after=${after})`)
+        .toBeLessThan(before);
+      return;
+    }
     const stillThere = await getCvPage(this).isCvInList();
     expect(stillThere, 'CV is still visible in the list after deletion').toBeFalsy();
   }
@@ -203,6 +214,13 @@ When('the candidate scrolls to the share section on the right side of the dashbo
 When('the candidate clicks the LinkedIn share icon',
   async function (this: CustomWorld) {
     const cv = getCvPage(this);
+    // The live CV manager entry exposes View / Delete / Download only (hover-
+    // revealed icons); there is no social-share control at all. See bugs/BUG-007.
+    expect(
+      await cv.hasLinkedInShare(),
+      'CV manager should expose a LinkedIn share control on a CV entry — the live ' +
+      'entry actions are View/Delete/Download only (bugs/BUG-007).'
+    ).toBeTruthy();
     const newPagePromise = cv.waitForLinkedInRedirect();
     await cv.clickLinkedInShareIcon();
     this.linkedInPage = await newPagePromise;
@@ -235,7 +253,12 @@ Then('the CV should be available for sharing with desired contacts on LinkedIn',
 
 Then('only the LinkedIn social media icon should be visible in the share section',
   async function (this: CustomWorld) {
-    const linkedInPresent = await getCvPage(this).isOnlyLinkedInShareVisible();
+    const cv = getCvPage(this);
+    expect(
+      await cv.hasLinkedInShare(),
+      'CV manager should expose a share section containing the LinkedIn icon (bugs/BUG-007).'
+    ).toBeTruthy();
+    const linkedInPresent = await cv.isOnlyLinkedInShareVisible();
     expect(
       linkedInPresent,
       'Expected the LinkedIn share icon to be visible in the share section'
@@ -275,9 +298,13 @@ When('the candidate selects {string} as the download format',
 Then('the CV should be downloaded as a PDF file',
   async function (this: CustomWorld) {
     const filename = this.downloadedFilename ?? '';
+    // Must be a real .pdf. Matching a bare /pdf/ anywhere in the name used to pass
+    // spuriously on "jobrator_Seed CV PDF.json" — the 404 error body the download
+    // control actually returns (bugs/BUG-008).
     expect(
       /\.pdf$/i.test(filename),
-      `Expected a PDF download but got: "${filename}"`
+      `Expected a PDF download but got: "${filename}". The CV manager download button ` +
+      'requests a non-existent API route and saves the 404 body (bugs/BUG-008).'
     ).toBeTruthy();
   }
 );
@@ -285,9 +312,13 @@ Then('the CV should be downloaded as a PDF file',
 Then('the CV should be downloaded as a DOC file',
   async function (this: CustomWorld) {
     const filename = this.downloadedFilename ?? '';
+    // A .docx CV is seeded by `npm run seed:full`, so the stored file IS a DOC.
+    // The download control currently returns "jobrator_<title>.json" holding an
+    // E_ROUTE_NOT_FOUND API error body instead of the document — see bugs/BUG-008.
     expect(
       /\.docx?$/i.test(filename),
-      `Expected a DOC/DOCX download but got: "${filename}"`
+      `Expected a DOC/DOCX download but got: "${filename}". The CV manager download ` +
+      'button requests a non-existent API route and saves the 404 body (bugs/BUG-008).'
     ).toBeTruthy();
   }
 );

@@ -26,13 +26,22 @@ export class SavedJobsPage extends BasePage {
     '.company-name, .employer-name, [data-testid="company-name"], ' +
     'td.company, [class*="company"], .firm-name';
 
+  // On the live Saved Jobs page the unsave control is an icon-only
+  // <button data-text="Delete from Saved Jobs"> with a .la-trash glyph — its
+  // label lives in data-text, not visible text, so has-text() will not match it.
   private readonly unsaveButton =
+    'button[data-text*="Delete from Saved" i], button[data-text*="Unsave" i], ' +
+    'button[data-text*="Remove" i], .option-list button:has(.la-trash), button:has(.la-trash), ' +
     'button:has-text("Unsave"), button:has-text("Remove"), button.unsave-btn, ' +
     'a:has-text("Unsave"), button[title*="unsave" i], button[title*="remove" i], ' +
     '[data-testid="unsave-button"], button:has-text("Delete"), ' +
     '.bookmark-remove, i.fa-bookmark ~ button, button:has-text("Saved")';
 
+  // The live Saved Jobs list routes to applying via a "View Job" action
+  // (<button data-text="View Job"> wrapping a link to /jobs/:id) rather than a
+  // direct Apply button, so accept that job-open action as the apply affordance.
   private readonly applyButton =
+    'button[data-text*="View Job" i], .option-list a[href*="/jobs/"], ' +
     'button:has-text("Apply"), a:has-text("Apply Now"), a:has-text("Apply"), ' +
     '.apply-btn, [data-testid="apply-button"], a.btn:has-text("Apply")';
 
@@ -43,7 +52,11 @@ export class SavedJobsPage extends BasePage {
 
   // ──── Job listing (public page) ──────────────────────────────────────────
 
+  // On the live /jobs listing each card's save control is <button class="bookmark-btn">
+  // containing a <span class="flaticon-bookmark"> icon (no visible text).
   private readonly saveBookmarkIcon =
+    'button.bookmark-btn, button:has(.flaticon-bookmark), [class*="bookmark"] button, ' +
+    'button[class*="bookmark"], .flaticon-bookmark, ' +
     '.save-job, .bookmark-icon, button[title*="save" i], button[title*="bookmark" i], ' +
     'button.save-btn, [data-testid="save-job"], .fa-bookmark, i.fa-bookmark, ' +
     'button:has-text("Save"), button:has-text("Bookmark"), .heart-btn, .wishlist-btn';

@@ -108,6 +108,12 @@ Then('each thread should display a timestamp',
 When('the employer opens a candidate conversation',
   async function (this: CustomWorld) {
     const messagesPage = getPage(this);
+    expect(
+      await messagesPage.hasThreads(),
+      'Employer should have at least one candidate conversation. Threads are seeded by ' +
+      '`npm run seed:full`, which opens one from the candidate side via the ' +
+      '"Private Message" control on the company page (/company/<id>).'
+    ).toBeTruthy();
     await messagesPage.openFirstThread();
     this.logMessage(`[EmployerMessages] Opened first candidate conversation → ${this.page.url()}`);
   }

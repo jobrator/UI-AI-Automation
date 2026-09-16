@@ -157,11 +157,20 @@ export class AppliedJobsPage extends BasePage {
 
   async isJobDetailPageLoaded(): Promise<boolean> {
     await this.page.waitForLoadState('domcontentloaded');
-    // Job detail pages typically have a full description section
+    // The live job-detail page renders client-side; its title is an <h4> in a
+    // .job-block-seven container and the body has a "Job Description" section.
     const descriptionSelector =
       '.job-description, .job-detail, .job-content, ' +
       '[class*="job-detail"], [class*="description"], ' +
+      '[class*="job-block"] .content h4, [class*="job-block"] h4:not(.widget-title), ' +
+      '*:has-text("Job Description"), *:has-text("Key Responsibilities"), ' +
       'article, .position-details, h1.job-title, .full-description';
-    return this.lib.isVisible(descriptionSelector);
+    try {
+      await this.page.locator(descriptionSelector).filter({ visible: true }).first()
+        .waitFor({ state: 'visible', timeout: 8000 });
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

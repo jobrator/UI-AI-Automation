@@ -107,7 +107,31 @@ CANDIDATE_PASSWORD=Tester@12
 ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-### 4. Run the tests
+### 4. Seed the environment
+
+Many scenarios assert against real cross-portal records (an application, a
+shortlist, a scheduled interview, a message thread, a draft job, a psychometric
+exam). Seed them before a full run — every stage is idempotent, so re-running is
+safe and cheap:
+
+| Goal | Command | When |
+|------|---------|------|
+| Reference data, jobs, a CV, a saved job | `npm run seed` | as needed |
+| Put the candidate on Jobrator Plus | `npm run seed:subscription` | **once per billing period** |
+| All cross-portal records | `npm run seed:full` | before a full regression run |
+
+`seed:subscription` runs **headed in real Chrome on purpose**: the Paystack test
+checkout sits behind a Cloudflare human-verification interstitial that headless
+Chromium cannot clear. Everything else runs headless.
+
+Applying to jobs and the AI features are subscription-gated, so `seed:full`
+reports a failed stage if the plan has lapsed — run `seed:subscription` first.
+
+Known product defects that make specific scenarios fail (with evidence and the
+affected test IDs) are tracked in [`bugs/README.md`](bugs/README.md). Those
+failures are intentional; don't soft-pass them back to green.
+
+### 5. Run the tests
 
 | Goal | Command |
 |------|---------|

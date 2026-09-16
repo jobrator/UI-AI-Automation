@@ -46,13 +46,10 @@ Given('the employer has published at least one job',
     const manageJobsPage = new ManageJobsPage(this.page);
     await manageJobsPage.navigate();
     const hasJobs = await manageJobsPage.hasJobs();
-    if (!hasJobs) {
-      console.warn(
-        '[CompanyProfile] No published jobs found for this employer. ' +
-        'Please ensure at least one job is published before running this scenario.'
-      );
-      return pending();
-    }
+    expect(
+      hasJobs,
+      'Employer should have at least one published job (seeded by `npm run seed:full`).'
+    ).toBeTruthy();
     this.logMessage('[CompanyProfile] Employer has at least one published job.');
     // Navigate back to company profile page for subsequent steps
     await getPage(this).navigate();

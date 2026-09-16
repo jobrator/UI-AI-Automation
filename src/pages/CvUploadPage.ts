@@ -284,6 +284,10 @@ export class CvUploadPage extends BasePage {
     return this.lib.isVisible(this.cvListItem);
   }
 
+  async getCvCount(): Promise<number> {
+    return this.lib.getCount(this.cvListItem);
+  }
+
   // ── Hover + icon click helpers ────────────────────────────────────────────
 
   private async hoverFirstCvItem(): Promise<void> {
@@ -437,35 +441,39 @@ export class CvUploadPage extends BasePage {
   // ══════════════════════════════════════════════════════════════════════════
 
   async hoverAndOpenDownloadFormatPicker(): Promise<void> {
+    // The live CV manager has no download-format picker — each CV entry exposes a
+    // single download button (la-download) returning the file in its stored
+    // format. Just reveal the entry's action buttons; selectDownloadFormat clicks
+    // the download control and captures the file.
     await this.hoverFirstCvItem();
-    await this._clickIconWithFallback(this.downloadIconSelector, 'download');
-    // Wait briefly for a format picker to appear (if not, selectDownloadFormat handles the download)
-    await this.page.waitForTimeout(800);
+    await this.page.waitForTimeout(300);
   }
 
   async selectDownloadFormat(format: string): Promise<string> {
     const upperFormat = format.toUpperCase();
-    // Try format picker modal or dropdown that appears after clicking download icon
-    try {
-      await this.page.waitForSelector(this.downloadFormatModal, { timeout: 5000 });
-      const btn = this.page.locator(
-        `${this.downloadFormatModal} button:has-text("${upperFormat}"), ` +
-        `${this.downloadFormatModal} a:has-text("${upperFormat}")`
-      ).first();
-      await btn.click();
-    } catch {
-      // Fallback: format button may be inline without a modal
-      const inlineBtn = this.page.locator(
-        `button:has-text("${upperFormat}"), a:has-text("${upperFormat}"), ` +
-        `[data-format="${format.toLowerCase()}"], [data-type="${format.toLowerCase()}"]`
-      ).first();
-      await inlineBtn.click({ timeout: 5000 });
-    }
-    await this.page.waitForTimeout(500);
+    // Use a real format picker if one exists (modal/inline button); otherwise the
+    // single download button downloads the CV in its native format.
+    const formatBtn = this.page.locator(
+      `${this.downloadFormatModal} button:has-text("${upperFormat}"), ` +
+      `${this.downloadFormatModal} a:has-text("${upperFormat}"), ` +
+      `button:has-text("${upperFormat}"), a:has-text("${upperFormat}"), ` +
+      `[data-format="${format.toLowerCase()}"], [data-type="${format.toLowerCase()}"]`
+    ).filter({ visible: true }).first();
+
+    const trigger = (await formatBtn.count().catch(() => 0))
+      ? () => formatBtn.click({ timeout: 5000 })
+      : () => this._clickIconWithFallback(this.downloadIconSelector, 'download');
+
     const [download] = await Promise.all([
       this.page.waitForEvent('download', { timeout: 15000 }),
+      trigger(),
     ]);
     return download.suggestedFilename();
+  }
+
+  /** True when a CV entry exposes a LinkedIn share control. */
+  async hasLinkedInShare(): Promise<boolean> {
+    return this.lib.isVisible(this.linkedInShareIcon);
   }
 
   // ══════════════════════════════════════════════════════════════════════════

@@ -71,12 +71,17 @@ export class MessagesPage extends BasePage {
     return this.lib.isVisible(this.messagesContainer);
   }
 
+  /**
+   * True when the candidate has at least one conversation.
+   *
+   * A conversation is an <li> inside `ul.contacts`. Counting generic children of
+   * `.contacts_column` gives a false positive, because an empty widget still
+   * renders a "You have reached end of your chat" wrapper div.
+   */
   async hasContacts(): Promise<boolean> {
-    // The chat widget has a contacts_column — if it exists and has children, there are contacts
-    const col = await this.page.locator('.contacts_column').first();
-    const exists = await col.isVisible().catch(() => false);
-    if (!exists) return false;
-    const count = await this.page.locator('.contacts_column a, .contacts_column > div').count();
+    const col = this.page.locator('.contacts_column').first();
+    if (!(await col.isVisible().catch(() => false))) return false;
+    const count = await this.page.locator('ul.contacts li, .contacts_body li').count().catch(() => 0);
     return count > 0;
   }
 
@@ -105,6 +110,8 @@ export class MessagesPage extends BasePage {
   async openFirstContact(): Promise<void> {
     // Try clicking the first visible item in the contacts column
     const contactSelectors = [
+      'ul.contacts li',
+      '.contacts_body li',
       '.contacts_column a',
       '.contacts_column > div:not(:first-child)',
       '.chat-list li',
@@ -157,16 +164,29 @@ export class MessagesPage extends BasePage {
     await this.page.locator(this.replyInput).first().fill(text, { force: true });
   }
 
+  /**
+   * Submit the composed reply.
+   *
+   * The live chat composer has no Send button — the `textarea[name="message"]`
+   * is submitted with Enter. A Send button is still preferred when present.
+   */
   async submitReply(): Promise<void> {
     const buttons = await this.page.locator(this.sendReplyButton).all();
     for (const btn of buttons) {
-      if (await btn.isVisible()) {
+      if (await btn.isVisible().catch(() => false)) {
         await btn.click();
-        await this.page.waitForTimeout(1500);
+        await this.page.waitForTimeout(2500);
         return;
       }
     }
-    await this.page.locator(this.sendReplyButton).first().click({ force: true });
-    await this.page.waitForTimeout(1500);
+    const input = this.page.locator(this.replyInput).filter({ visible: true }).first();
+    await input.click().catch(() => {});
+    await this.page.keyboard.press('Enter');
+    await this.page.waitForTimeout(2500);
+  }
+
+  /** Full text of the open conversation thread. */
+  async getThreadText(): Promise<string> {
+    return ((await this.page.textContent('.message-card').catch(() => '')) ?? '').replace(/\s+/g, ' ').trim();
   }
 }

@@ -97,10 +97,20 @@ export class AllApplicantsPage extends BasePage {
     return this.lib.isVisible('.tab-btn, [role="tab"], h4:has-text("Applicant"), .aplicantion-status');
   }
 
+  /**
+   * True when an application entry shows the job the candidate applied to.
+   *
+   * The live applicant card (`.inner-box`) renders the candidate name, skill tags,
+   * a "CV" link and the status badge — but no job title. The job is only implied by
+   * the page-level "All Jobs" filter. Returns false on the current build; see
+   * bugs/BUG-006.
+   */
   async isJobTitleVisible(): Promise<boolean> {
     const hasApplicants = await this.hasApplicants();
-    if (hasApplicants) return this.lib.isVisible(this.jobTitle);
-    return this.lib.isVisible('th:has-text("Job"), th:has-text("Title"), th:has-text("Position"), .tab-btn, [role="tab"]');
+    if (!hasApplicants) {
+      return this.lib.isVisible('th:has-text("Job"), th:has-text("Title"), th:has-text("Position"), .tab-btn, [role="tab"]');
+    }
+    return this.lib.isVisible(this.jobTitle);
   }
 
   async isApplicationStatusVisible(): Promise<boolean> {

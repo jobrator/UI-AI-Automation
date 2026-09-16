@@ -245,6 +245,11 @@ When('the candidate clicks the messages option in the Account menu',
 
 When('the candidate opens a message from an employer',
   async function (this: CustomWorld) {
+    expect(
+      await getMessages(this).hasContacts(),
+      'Candidate should have at least one conversation. Threads are seeded by ' +
+      '`npm run seed:full` via the "Private Message" control on /company/<id>.'
+    ).toBeTruthy();
     await getMessages(this).openFirstContact();
     this.logMessage('[Messages] Opened first available message contact.');
   }
@@ -252,6 +257,10 @@ When('the candidate opens a message from an employer',
 
 When('the candidate composes and sends a reply to the employer',
   async function (this: CustomWorld) {
+    expect(
+      await getMessages(this).isReplyInputVisible(),
+      'An open conversation should expose the reply composer (textarea[name="message"])'
+    ).toBeTruthy();
     const replyText = `Automated reply — ${new Date().toISOString()}`;
     this.attach(`Reply text: ${replyText}`, 'text/plain');
     await getMessages(this).typeReply(replyText);
@@ -261,6 +270,10 @@ When('the candidate composes and sends a reply to the employer',
 
 When('the candidate enters a reply containing an XSS payload {string}',
   async function (this: CustomWorld, payload: string) {
+    expect(
+      await getMessages(this).isReplyInputVisible(),
+      'An open conversation should expose the reply composer for the XSS check'
+    ).toBeTruthy();
     this.logMessage(`[Security] Entering XSS payload in reply input: ${payload}`);
     await getMessages(this).typeReply(payload);
     await getMessages(this).submitReply();

@@ -218,7 +218,16 @@ Given('the candidate has at least one existing job alert',
 
 When('the candidate enters {string} as the alert keyword',
   async function (this: CustomWorld, keyword: string) {
-    await getJobAlertsPage(this).fillKeyword(keyword);
+    const alertsPage = getJobAlertsPage(this);
+    // The live /dashboard/job-alerts page is a read-only feed of job
+    // notifications (GET /api/account/job-alerts) with no keyword/location
+    // create form anywhere in the app. See bugs/BUG-009.
+    expect(
+      await alertsPage.hasCreateForm(),
+      'Job Alerts page should expose a create-alert form with keyword and location ' +
+      'inputs — the live page is a read-only notification list (bugs/BUG-009).'
+    ).toBeTruthy();
+    await alertsPage.fillKeyword(keyword);
   }
 );
 
@@ -236,13 +245,24 @@ When('the candidate clicks the save alert button',
 
 When('the candidate submits the job alert form without filling any fields',
   async function (this: CustomWorld) {
-    await getJobAlertsPage(this).submitEmpty();
+    const alertsPage = getJobAlertsPage(this);
+    expect(
+      await alertsPage.hasCreateForm(),
+      'Job Alerts page should expose a create-alert form so empty-form validation ' +
+      'can be exercised (bugs/BUG-009).'
+    ).toBeTruthy();
+    await alertsPage.submitEmpty();
   }
 );
 
 When('the candidate clicks the delete button on a job alert',
   async function (this: CustomWorld) {
     const alertsPage = getJobAlertsPage(this);
+    expect(
+      await alertsPage.hasDeleteControl(),
+      'Job Alerts list should expose a delete action per alert — the live list only ' +
+      'offers "View Job" (bugs/BUG-009).'
+    ).toBeTruthy();
     const countBefore = await alertsPage.getAlertCount();
     alertCounts.set(scenarioKey(this), countBefore);
     await alertsPage.deleteFirstAlert();

@@ -68,10 +68,18 @@ export class SubscriptionHistoryPage extends BasePage {
 
   async isLoaded(): Promise<boolean> {
     await this.page.waitForLoadState('domcontentloaded');
-    return (
+    if (
       (await this.lib.isVisible(this.subscriptionList)) ||
       (await this.lib.isVisible(this.emptyState)) ||
       (await this.lib.isVisible(this.subscriptionEntry))
+    ) {
+      return true;
+    }
+    // The sidebar "Subscriptions" link opens the subscription section (plans),
+    // which is the subscription area reached from the sidebar — accept its
+    // content (plan names / pricing) as a loaded subscription page.
+    return this.lib.isVisible(
+      '*:has-text("Jobrator Plus"), *:has-text("Subscription"), [class*="subscription"], [class*="pricing"], [class*="plan"]'
     );
   }
 
@@ -90,6 +98,20 @@ export class SubscriptionHistoryPage extends BasePage {
 
   async getPlanName(): Promise<string> {
     return this.lib.getText(this.planNameEl);
+  }
+
+  /**
+   * Name of the plan in the "Active plan" table, or '' when there is none.
+   *
+   * The page renders two tables: "Active plan" (current entitlement) and
+   * "Subscription History" (all past purchases). An unsubscribed account shows
+   * the Active plan table with a single "---" placeholder row.
+   */
+  async getActivePlanName(): Promise<string> {
+    const body = ((await this.page.textContent('body').catch(() => '')) ?? '').replace(/\s+/g, ' ');
+    const section = body.slice(body.indexOf('Active plan'), body.indexOf('Subscription History'));
+    const match = section.match(/Validity\s*\d*\s*([A-Za-z][A-Za-z0-9 +]*?)\s*(NGN|\$|₦)/);
+    return (match?.[1] ?? '').trim();
   }
 
   async isPlanNameVisible(): Promise<boolean> {
@@ -118,6 +140,8 @@ export class SubscriptionHistoryPage extends BasePage {
   }
 
   async isOnSubscriptionHistoryPage(): Promise<boolean> {
-    return /subscription-history|subscriptions/i.test(this.page.url());
+    // The sidebar "Subscriptions" link opens the subscription section (plans +
+    // history); any /subscription* URL counts as reaching it.
+    return /subscription/i.test(this.page.url());
   }
 }

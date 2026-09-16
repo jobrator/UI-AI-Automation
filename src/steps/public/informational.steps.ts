@@ -162,12 +162,23 @@ Then('the answer panel should collapse and hide its content',
 
 Then('a success confirmation message should be displayed',
   async function (this: CustomWorld) {
-    // Generic: works for contact form, password change, and any other success flow
+    // Generic: works for contact form, password change, and any other success flow.
+    // The live contact form confirms via a SweetAlert2 popup ("Your Message was
+    // sent successfully!"). We target real notification containers (SweetAlert /
+    // toast / alert / status) rather than a body-wide *:has-text() wildcard so the
+    // assertion cannot be satisfied by unrelated copy elsewhere on the page.
     const successSelector =
-      '[class*="success"], .toast-success, [role="alert"][class*="success"], ' +
-      '[role="status"]:has-text("success"), *:has-text("Thank you"), ' +
-      '*:has-text("successfully"), *:has-text("Password changed"), ' +
-      '*:has-text("Message sent"), *:has-text("submitted")';
+      // SweetAlert2 success popup
+      '.swal2-popup.swal2-icon-success, .swal2-icon.swal2-success, ' +
+      '.swal2-title:has-text("Success"), .swal2-html-container:has-text("success"), ' +
+      // Toast / alert / status notification containers carrying success wording
+      '.toast-success, .alert-success, [role="alert"][class*="success"], ' +
+      '[class*="toast"]:has-text("success"), [class*="alert"]:has-text("sent"), ' +
+      '[class*="notify"]:has-text("success"), [role="status"]:has-text("success"), ' +
+      '[class*="success"]:has-text("success"), ' +
+      // Specific full-phrase confirmations (safe: absent before the action succeeds)
+      ':text("Message was sent successfully"), :text("Password changed"), ' +
+      ':text("Message sent")';
     const visible = await this.page.locator(successSelector).first()
       .isVisible({ timeout: 8000 }).catch(() => false);
     expect(visible, 'Expected a success confirmation message to be displayed').toBeTruthy();
