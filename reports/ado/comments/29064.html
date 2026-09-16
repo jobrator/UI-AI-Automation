@@ -1,0 +1,20 @@
+<b>Retest — 2026-08-19 — NOT REPRODUCIBLE (blocked on test data, not verified fixed)</b><br><br>
+Attempted the documented repro on web: signed in as a candidate and opened
+Applied Jobs (https://jobrator.com/dashboard/applied-jobs), reading both the rendered
+rows and the backing API
+<code>GET /api/account/job-posts/applied/?page=1&amp;sort=desc</code>.<br><br>
+<b>Blocker — the required precondition does not exist on this account:</b>
+<pre>Applied job posts found : 10  (all seeded "Journey QA Job 17851…")
+Job posts marked Expired: 0
+Applications with a skill test attached: 0  (skill_test / exam = null on every record)</pre>
+There is no expired job application, and none of the applications has a skill test
+attached — so the "take the test after the posting expired" path could not be exercised
+at all. <b>This is not a pass.</b> The bug is neither confirmed nor cleared.<br><br>
+<b>To make this retestable</b>, the environment needs a job post that (a) has a skill test
+assigned, (b) has been applied to by a candidate, and (c) has an expiry date in the past —
+plus a test whose time window has elapsed. Happy to re-run once that data is seeded, or if
+you can point me at an account/job that already has it.<br><br>
+<b>Unrelated defect observed on the same page</b> (worth its own ticket): the Applied Jobs
+list issues a malformed request —
+<code>GET https://api.jobrator.com/api/account/job-posts/appliednull&amp;sort=desc</code>
+— the pagination parameter is concatenated as the literal string "null" with the path.

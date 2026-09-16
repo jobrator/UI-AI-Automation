@@ -1,0 +1,37 @@
+{
+  "#28140": {
+    "verdict": "PASS — the uploaded CV appears in the list without a refresh",
+    "evidence": [
+      "CV count before upload (after clearing): 0",
+      "Upload success popup shown: true",
+      "CV count WITHOUT refresh: 1",
+      "CV count AFTER refresh: 1"
+    ]
+  },
+  "#28941": {
+    "verdict": "PARTIAL — skill-test notification content present in-app (email delivery not verifiable here)",
+    "evidence": [
+      "Notifications route reached: /dashboard/notifications → https://jobrator.com/dashboard/notifications",
+      "\"skill test\" appears in notifications feed: true",
+      "expiry-reminder wording (48h/24h/2h/expire) appears: false",
+      "notification API calls: 200 GET https://jobrator.com/dashboard/notifications | 200 GET https://jobrator.com/_next/static/chunks/pages/dashboard/notifications-20cd7b273ef9ebf4.js | 200 GET https://api.jobrator.com/api/account/candidate-unread-notifications | 200 GET https://api.jobrator.com/api/account/candidate-notifications/?page=1&limit=10"
+    ]
+  },
+  "#29062": {
+    "verdict": "FAIL — no 48h/24h/2h skill-test expiry reminders in the in-app feed",
+    "evidence": [
+      "Notifications route reached: /dashboard/notifications → https://jobrator.com/dashboard/notifications",
+      "\"skill test\" appears in notifications feed: true",
+      "expiry-reminder wording (48h/24h/2h/expire) appears: false",
+      "notification API calls: 200 GET https://jobrator.com/dashboard/notifications | 200 GET https://jobrator.com/_next/static/chunks/pages/dashboard/notifications-20cd7b273ef9ebf4.js | 200 GET https://api.jobrator.com/api/account/candidate-unread-notifications | 200 GET https://api.jobrator.com/api/account/candidate-notifications/?page=1&limit=10"
+    ]
+  },
+  "#29064": {
+    "verdict": "BLOCKED — no expired job application on this account; cannot exercise the expired-test path",
+    "evidence": [
+      "Applied-jobs URL: https://jobrator.com/dashboard/applied-jobs",
+      "\"Expired\" markers on applied jobs: 0",
+      "Take/Start Test controls found: 1"
+    ]
+  }
+}

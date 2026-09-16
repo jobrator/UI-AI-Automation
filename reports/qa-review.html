@@ -1,0 +1,708 @@
+
+<title>Jobrator E2E — QA Review</title>
+<style>
+  :root {
+    --surface:      #fcfcfb;
+    --plane:        #f9f9f7;
+    --ink:          #0b0b0b;
+    --ink-2:        #52514e;
+    --muted:        #898781;
+    --hair:         #e1e0d9;
+    --rule:         #c3c2b7;
+    --good:         #0ca30c;
+    --warning:      #fab219;
+    --critical:     #d03b3b;
+    --serious:      #ec835a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--ink);
+    background: var(--surface);
+    font-size: 10.5px;
+    line-height: 1.5;
+    margin: 0;
+  }
+  h1 { font-size: 25px; margin: 0 0 4px; letter-spacing: -0.02em; }
+  h2 {
+    font-size: 14px; margin: 0 0 10px;
+    padding-bottom: 5px; border-bottom: 1.5px solid var(--ink);
+    letter-spacing: -0.01em;
+  }
+  h3 { font-size: 11px; margin: 14px 0 6px; }
+  /* never strand a heading at the foot of a page */
+  h2, h3 { break-after: avoid; }
+  thead { break-after: avoid; }
+  p  { margin: 0 0 8px; }
+  section { margin-bottom: 22px; }
+  .sub { color: var(--ink-2); font-size: 11px; }
+  .meta { color: var(--muted); font-size: 9.5px; }
+
+  header.cover {
+    border-bottom: 2.5px solid var(--ink);
+    padding-bottom: 12px; margin-bottom: 20px;
+  }
+  .kicker {
+    text-transform: uppercase; letter-spacing: 0.09em;
+    font-size: 9px; font-weight: 700; color: var(--muted); margin-bottom: 6px;
+  }
+  .runmeta {
+    display: flex; flex-wrap: wrap; gap: 6px 26px;
+    margin-top: 10px; font-size: 9.5px; color: var(--ink-2);
+  }
+  .runmeta b { color: var(--ink); font-weight: 600; }
+
+  /* KPI row */
+  .kpis { display: flex; gap: 8px; margin-bottom: 14px; }
+  .kpi {
+    flex: 1; border: 1px solid var(--hair); border-radius: 7px;
+    padding: 9px 11px; background: var(--plane);
+  }
+  .kpi .label {
+    font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--muted); font-weight: 600; margin-bottom: 3px;
+  }
+  .kpi .value { font-size: 22px; font-weight: 650; letter-spacing: -0.02em; }
+  .kpi .foot { font-size: 8.5px; color: var(--ink-2); margin-top: 1px; }
+  .kpi--good    .value { color: var(--good); }
+  .kpi--crit    .value { color: var(--critical); }
+  .kpi--warn    .value { color: #a5730a; }
+
+  /* stacked share bar */
+  .bar {
+    display: flex; height: 20px; border-radius: 4px; overflow: hidden;
+    background: var(--plane); gap: 2px; margin-bottom: 6px;
+  }
+  .bar span { display: block; }
+  .legend { display: flex; gap: 16px; font-size: 9px; color: var(--ink-2); }
+  .legend i {
+    display: inline-block; width: 9px; height: 9px; border-radius: 2px;
+    margin-right: 5px; vertical-align: -1px;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 9.5px; }
+  thead th {
+    text-align: left; font-size: 8.5px; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--muted); font-weight: 700;
+    border-bottom: 1px solid var(--rule); padding: 5px 7px 4px;
+  }
+  td { padding: 6px 7px; border-bottom: 1px solid var(--hair); vertical-align: top; }
+  tbody tr { break-inside: avoid; }
+  td.tc { font-weight: 650; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .scn { font-weight: 550; }
+  .where { color: var(--muted); font-size: 8.5px; }
+
+  .pill {
+    display: inline-block; padding: 1px 6px; border-radius: 20px;
+    font-size: 8px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; white-space: nowrap;
+  }
+  .pill--good     { background: #e7f6e7; color: #05630c; }
+  .pill--critical { background: #fbe9e9; color: #8f2020; }
+  .pill--warning  { background: #fdf1d6; color: #7a5406; }
+
+  code, .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 8.5px;
+  }
+  .err {
+    background: #fbf6f6; border-left: 2.5px solid var(--critical);
+    padding: 5px 7px; margin-top: 4px; border-radius: 0 4px 4px 0;
+    white-space: pre-wrap; word-break: break-word; color: #6d1f1f;
+  }
+  .why {
+    background: #fdfaf1; border-left: 2.5px solid var(--warning);
+    padding: 5px 7px; margin-top: 4px; border-radius: 0 4px 4px 0;
+    color: #6b4d08;
+  }
+  .verdict {
+    font-weight: 700; font-size: 8.5px; text-transform: uppercase;
+    letter-spacing: 0.05em; color: #8f2020;
+  }
+  .callout {
+    border: 1px solid var(--hair); border-left: 3px solid var(--critical);
+    background: var(--plane); border-radius: 0 7px 7px 0;
+    padding: 10px 13px; margin-bottom: 12px;
+  }
+  .callout h3 { margin-top: 0; }
+  ul { margin: 0 0 8px; padding-left: 16px; }
+  li { margin-bottom: 3px; }
+  .empty {
+    padding: 12px; border: 1px dashed var(--rule); border-radius: 7px;
+    color: var(--ink-2); text-align: center; font-size: 10px;
+  }
+  .page-break { break-before: page; }
+</style>
+
+<header class="cover">
+  <div class="kicker">QA Review Pack &middot; Regression Run</div>
+  <h1>Jobrator E2E — Failed &amp; Skipped Scenarios</h1>
+  <div class="sub">Playwright + Cucumber BDD &middot; full regression suite</div>
+  <div class="runmeta">
+    <div>Run date <b>Wednesday, 29 July 2026 at 03:13</b></div>
+    <div>Environment <b>https://jobrator.com</b></div>
+    <div>Browser <b>Chromium</b></div>
+    <div>Scenarios <b>335</b></div>
+    <div>Source <b>full regression run, 2026-07-27</b></div>
+  </div>
+</header>
+
+<div class="callout" style="border-left-color:var(--warning)">
+  <h3 style="margin-bottom:4px">Data provenance</h3>
+  <p style="margin:0">Figures are from the full regression run of 2026-07-27 (335 scenarios, 19m15s). That run's cucumber JSON was later overwritten by single-scenario debug runs, so the dataset behind this report was reconstructed from the run's own recorded console output; totals reconstruct exactly to cucumber's summary line (313 passed / 20 failed / 2 skipped), both by verdict and by step status. A confirmatory re-run on 2026-07-28 could not be used: the jobrator.com environment became unreachable mid-run (TCP 443 refused on both jobrator.com and api.jobrator.com), producing 317 timeout-driven failures that reflect the outage, not the product.</p>
+</div>
+
+<section>
+  <h2>1. Executive summary</h2>
+  <div class="kpis">
+    <div class="kpi kpi--good">
+      <div class="label">Passed</div><div class="value">313</div>
+      <div class="foot">93.4% of suite</div>
+    </div>
+    <div class="kpi kpi--crit">
+      <div class="label">Failed</div><div class="value">20</div>
+      <div class="foot">needs triage</div>
+    </div>
+    <div class="kpi kpi--warn">
+      <div class="label">Skipped</div><div class="value">2</div>
+      <div class="foot">no verdict reached</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Pass rate (executed)</div><div class="value">94.0%</div>
+      <div class="foot">313 of 333 that ran</div>
+    </div>
+  </div>
+
+  <div class="bar">
+    <span style="width:93.43283582089552%;background:var(--good)"></span>
+    <span style="width:5.970149253731343%;background:var(--critical)"></span>
+    <span style="width:0.5970149253731344%;background:var(--warning)"></span>
+    
+  </div>
+  <div class="legend">
+    <span><i style="background:var(--good)"></i>Passed 313</span>
+    <span><i style="background:var(--critical)"></i>Failed 20</span>
+    <span><i style="background:var(--warning)"></i>Skipped 2</span>
+    
+  </div>
+
+  <h3>What the meeting needs to decide</h3>
+  <ul>
+    <li><b>20</b> scenarios failed, all now triaged.
+        <b>14</b> trace to a filed defect; <b>6</b> are test bugs or
+        flake rather than product defects — see §3.</li>
+    <li><b>Three new defects filed from this run: BUG-013, BUG-014, BUG-015.</b> Two are P1 —
+        VNIN verification is non-functional in production, and the verification provider's admin
+        credentials are exposed in client-side code.</li>
+    <li><b>2</b> scenarios were skipped by the framework and reached
+        <i>no verdict at all</i>. A skip is not a pass: these represent untested coverage — see §4.</li>
+    <li>Skips currently labelled "environmental" in the step definitions have been
+        re-investigated; at least one is a genuine production defect being masked. See §5.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>2. Where the problems cluster</h2>
+  <table>
+    <thead><tr><th>Feature area</th><th class="num">Failed</th><th class="num">Skipped</th><th class="num">Total open</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>dashboard / Upload Candidate CV</td>
+        <td class="num">4</td>
+        <td class="num"></td>
+        <td class="num"><b>4</b></td>
+      </tr><tr>
+        <td>candidate / Candidate Saved Jobs and Job Alerts</td>
+        <td class="num">3</td>
+        <td class="num"></td>
+        <td class="num"><b>3</b></td>
+      </tr><tr>
+        <td>dashboard / Generate CV with AI</td>
+        <td class="num">3</td>
+        <td class="num"></td>
+        <td class="num"><b>3</b></td>
+      </tr><tr>
+        <td>employer / Employer Shortlisted CVs and Scheduled Interviews</td>
+        <td class="num">2</td>
+        <td class="num"></td>
+        <td class="num"><b>2</b></td>
+      </tr><tr>
+        <td>candidate / Candidate VNIN Verification</td>
+        <td class="num"></td>
+        <td class="num">2</td>
+        <td class="num"><b>2</b></td>
+      </tr><tr>
+        <td>admin / Admin Assessment Management — Psychometric and Skill Tests</td>
+        <td class="num">1</td>
+        <td class="num"></td>
+        <td class="num"><b>1</b></td>
+      </tr><tr>
+        <td>admin / Admin Company and Candidate Management</td>
+        <td class="num">1</td>
+        <td class="num"></td>
+        <td class="num"><b>1</b></td>
+      </tr><tr>
+        <td>admin / Admin Job Post Management</td>
+        <td class="num">1</td>
+        <td class="num"></td>
+        <td class="num"><b>1</b></td>
+      </tr><tr>
+        <td>auth / Candidate Registration</td>
+        <td class="num">1</td>
+        <td class="num"></td>
+        <td class="num"><b>1</b></td>
+      </tr><tr>
+        <td>auth / Employer Registration</td>
+        <td class="num">1</td>
+        <td class="num"></td>
+        <td class="num"><b>1</b></td>
+      </tr><tr>
+        <td>candidate / Candidate My Profile</td>
+        <td class="num">1</td>
+        <td class="num"></td>
+        <td class="num"><b>1</b></td>
+      </tr><tr>
+        <td>employer / Employer All Applicants</td>
+        <td class="num">1</td>
+        <td class="num"></td>
+        <td class="num"><b>1</b></td>
+      </tr><tr>
+        <td>employer / Employer Messages</td>
+        <td class="num">1</td>
+        <td class="num"></td>
+        <td class="num"><b>1</b></td>
+      </tr>
+    </tbody></table>
+</section>
+
+<section class="page-break">
+  <h2>3. Failed scenarios (20)</h2>
+  <p class="sub">All 20 have been investigated against the live site.
+  <b>14</b> map to a filed defect in the <span class="mono">bugs/</span> log and are
+  expected to stay red until dev fixes them. The remaining <b>6</b> were triaged and
+  found <b>not</b> to be product defects — two are test bugs, four are flake that passed on a
+  sequential re-run.</p>
+
+  
+    <h3>3.1 &nbsp;Triaged — not product defects (6)</h3>
+      <table>
+  <thead><tr>
+    <th style="width:74px">Test ID</th>
+    <th>Scenario &amp; failure</th>
+    <th style="width:62px">Defect</th>
+    <th class="num" style="width:44px">Time</th>
+  </tr></thead>
+  <tbody>
+    <tr>
+      <td class="tc">TC_ACC006</td>
+      <td>
+        <div class="scn">TC_ACC006 — Admin can create a new candidate record from the admin console</div>
+        <div class="where">Admin Company and Candidate Management &middot; features/admin/admin_company_candidate_management.feature:70</div>
+        <div class="where">Failed at: <span class="mono">Then the new candidate record should appear in the candidates list</span></div>
+        <div class="err mono">Error: expect(received).toBeGreaterThan(expected)
+Expected: &gt; 0
+Received:   0</div>
+        <div class="why">FLAKY — passed on sequential re-run; no product defect identified.</div>
+      </td>
+      <td class="mono"><span class="where">triaged<br>not a bug</span></td>
+      <td class="num">26.6s</td>
+    </tr><tr>
+      <td class="tc">TC_AJP002</td>
+      <td>
+        <div class="scn">TC_AJP002 — Admin can create a new job post from the admin console</div>
+        <div class="where">Admin Job Post Management &middot; features/admin/admin_job_posts.feature:23</div>
+        <div class="where">Failed at: <span class="mono">Then the new job post should appear in the admin job posts list</span></div>
+        <div class="err mono">Error: expect(received).toBeGreaterThan(expected)
+Expected: &gt; 0
+Received:   0</div>
+        <div class="why">FLAKY — passed on sequential re-run; no product defect identified.</div>
+      </td>
+      <td class="mono"><span class="where">triaged<br>not a bug</span></td>
+      <td class="num">30.6s</td>
+    </tr><tr>
+      <td class="tc">TC_REG005</td>
+      <td>
+        <div class="scn">TC_REG005 - Registration fails when all required fields are left empty</div>
+        <div class="where">Candidate Registration &middot; features/auth/candidate_registration.feature:41</div>
+        <div class="where">Failed at: <span class="mono">When the user submits the registration form without filling any fields</span></div>
+        <div class="err mono">locator.click: Timeout 30000ms exceeded.
+Call log:
+- waiting for locator('button[type="submit"][form="candidateRegister"]').filter({ visible: true }).first()
+- locator resolved to &lt;button disabled type="submit" form="candidateRegister" class="theme-btn btn-style-one d-flex gap-3 mb-0 cursor-disabled"&gt;Register&lt;/button&gt;
+- attempting click action
+2 × waiting for element to be visible, enabled and stable
+- element is not enabled
+- retrying click action
+- waiting 20ms
+2 × waiting for element to be visible, enabled and stable
+- element is not enabled
+- retrying click action
+- waiting 100ms
+56 × waiting for element to be visible, enabled and stable
+- element is not enabled
+- retrying click action
+-…</div>
+        <div class="why">FLAKY — passed on sequential re-run; no product defect identified.</div>
+      </td>
+      <td class="mono"><span class="where">triaged<br>not a bug</span></td>
+      <td class="num">30.6s</td>
+    </tr><tr>
+      <td class="tc">TC_EREG012</td>
+      <td>
+        <div class="scn">TC_EREG012 - Email field rejects SQL injection payload</div>
+        <div class="where">Employer Registration &middot; features/auth/employer_registration.feature:84</div>
+        <div class="where">Failed at: <span class="mono">And the user overrides the employer email with an invalid value "' OR '1'='1"</span></div>
+        <div class="err mono">locator.fill: Timeout 30000ms exceeded.
+Call log:
+- waiting for locator('input[name="companyEmail"]').filter({ visible: true }).first()</div>
+        <div class="why">FLAKY — passed on sequential re-run; no product defect identified.</div>
+      </td>
+      <td class="mono"><span class="where">triaged<br>not a bug</span></td>
+      <td class="num">30.7s</td>
+    </tr><tr>
+      <td class="tc">TC_CP004</td>
+      <td>
+        <div class="scn">TC_CP004 — Skills multi-select allows searching and adding skills as tags</div>
+        <div class="where">Candidate My Profile &middot; features/candidate/candidate_profile.feature:37</div>
+        <div class="where">Failed at: <span class="mono">And the candidate selects a skill from the dropdown suggestions</span></div>
+        <div class="err mono">locator.waitFor: Timeout 30000ms exceeded.
+Call log:
+- waiting for locator('.select__option:has-text("JavaScript"), [class*="select__option"]:has-text("JavaScript"), .select2-results__option:has-text("JavaScript"), .dropdown-item:has-text("JavaScript"), [role="option"]:has-text("JavaScript"), .multiselect__option:has-text("JavaScript")').filter({ visible: true }).first() to be visible</div>
+        <div class="why">NOT A DEFECT — test-data dependency. The shared candidate already has Java, C#, PHP and JavaScript selected; react-select hides already-selected options, so searching "JavaScript" correctly returns "No options". Fix: have the test pick a skill not already on the profile.</div>
+      </td>
+      <td class="mono"><span class="where">triaged<br>not a bug</span></td>
+      <td class="num">34.3s</td>
+    </tr><tr>
+      <td class="tc">TC_EMSG003</td>
+      <td>
+        <div class="scn">TC_EMSG003 — Empty state is shown when the employer has no message threads</div>
+        <div class="where">Employer Messages &middot; features/employer/employer_messages.feature:32</div>
+        <div class="where">Failed at: <span class="mono">Then an appropriate empty state message should be displayed on the messages page</span></div>
+        <div class="err mono">Error: expect(received).toBeTruthy()
+Received: false</div>
+        <div class="why">NOT A DEFECT — unsatisfiable precondition. "the employer account has no message threads" only warns when threads exist and proceeds anyway; the seeded employer has threads, so the empty state legitimately cannot render. Fix: use a thread-free account or drop the scenario.</div>
+      </td>
+      <td class="mono"><span class="where">triaged<br>not a bug</span></td>
+      <td class="num">4.7s</td>
+    </tr>
+  </tbody></table>
+    <h3>3.2 &nbsp;Re-confirming a known defect (14)</h3>
+      <table>
+  <thead><tr>
+    <th style="width:74px">Test ID</th>
+    <th>Scenario &amp; failure</th>
+    <th style="width:62px">Defect</th>
+    <th class="num" style="width:44px">Time</th>
+  </tr></thead>
+  <tbody>
+    <tr>
+      <td class="tc">TC_AT003</td>
+      <td>
+        <div class="scn">TC_AT003 — Admin can edit an existing psychometric exam and persist changes</div>
+        <div class="where">Admin Assessment Management — Psychometric and Skill Tests &middot; features/admin/admin_assessments.feature:34</div>
+        <div class="where">Failed at: <span class="mono">Given at least one psychometric exam exists on the platform</span></div>
+        <div class="err mono">Error: expect(received).toBeGreaterThan(expected)
+Expected: &gt; 0
+Received:   0</div>
+        
+      </td>
+      <td class="mono">BUG-002</td>
+      <td class="num">7.4s</td>
+    </tr><tr>
+      <td class="tc">TC_SJ004</td>
+      <td>
+        <div class="scn">TC_SJ004 — Candidate can create a new job alert with keyword and location</div>
+        <div class="where">Candidate Saved Jobs and Job Alerts &middot; features/candidate/saved_jobs_and_alerts.feature:49</div>
+        <div class="where">Failed at: <span class="mono">When the candidate enters "QA Engineer" as the alert keyword</span></div>
+        <div class="err mono">Error: expect(received).toBeTruthy()
+Received: false</div>
+        
+      </td>
+      <td class="mono">BUG-009</td>
+      <td class="num">2.9s</td>
+    </tr><tr>
+      <td class="tc">TC_SJ005</td>
+      <td>
+        <div class="scn">TC_SJ005 — Job alert creation fails when required fields are empty</div>
+        <div class="where">Candidate Saved Jobs and Job Alerts &middot; features/candidate/saved_jobs_and_alerts.feature:57</div>
+        <div class="where">Failed at: <span class="mono">When the candidate submits the job alert form without filling any fields</span></div>
+        <div class="err mono">Error: expect(received).toBeTruthy()
+Received: false</div>
+        
+      </td>
+      <td class="mono">BUG-009</td>
+      <td class="num">2.9s</td>
+    </tr><tr>
+      <td class="tc">TC_SJ006</td>
+      <td>
+        <div class="scn">TC_SJ006 — Candidate can delete an existing job alert</div>
+        <div class="where">Candidate Saved Jobs and Job Alerts &middot; features/candidate/saved_jobs_and_alerts.feature:62</div>
+        <div class="where">Failed at: <span class="mono">When the candidate clicks the delete button on a job alert</span></div>
+        <div class="err mono">Error: expect(received).toBeTruthy()
+Received: false</div>
+        
+      </td>
+      <td class="mono">BUG-009</td>
+      <td class="num">3.1s</td>
+    </tr><tr>
+      <td class="tc">TC070</td>
+      <td>
+        <div class="scn">TC070 — Subscribed candidate generates an experience description via AI</div>
+        <div class="where">Generate CV with AI &middot; features/dashboard/generate_cv_with_ai.feature:90</div>
+        <div class="where">Failed at: <span class="mono">And the candidate enters experience points "Built REST APIs, led team of 5 devs, improved performance by 40%" and clicks Generate</span></div>
+        <div class="err mono">Error: expect(received).toBeFalsy()
+Received: true</div>
+        
+      </td>
+      <td class="mono">BUG-015</td>
+      <td class="num">15.1s</td>
+    </tr><tr>
+      <td class="tc">TC071</td>
+      <td>
+        <div class="scn">TC071 — Subscribed candidate uses Write via AI to generate the about section</div>
+        <div class="where">Generate CV with AI &middot; features/dashboard/generate_cv_with_ai.feature:98</div>
+        <div class="where">Failed at: <span class="mono">And the candidate enters experience points "Built REST APIs and microservices" and clicks Generate</span></div>
+        <div class="err mono">Error: expect(received).toBeFalsy()
+Received: true</div>
+        
+      </td>
+      <td class="mono">BUG-015</td>
+      <td class="num">14.9s</td>
+    </tr><tr>
+      <td class="tc">TC072</td>
+      <td>
+        <div class="scn">TC072 — Subscribed candidate creates a complete AI-assisted CV</div>
+        <div class="where">Generate CV with AI &middot; features/dashboard/generate_cv_with_ai.feature:107</div>
+        <div class="where">Failed at: <span class="mono">And the candidate enters experience points "Led engineering team, delivered 3 major product launches" and clicks Generate</span></div>
+        <div class="err mono">Error: expect(received).toBeFalsy()
+Received: true</div>
+        
+      </td>
+      <td class="mono">BUG-015</td>
+      <td class="num">14.5s</td>
+    </tr><tr>
+      <td class="tc">TC056</td>
+      <td>
+        <div class="scn">TC056 — Share uploaded CV via LinkedIn from CV manager</div>
+        <div class="where">Upload Candidate CV &middot; features/dashboard/upload_candidate_cv.feature:61</div>
+        <div class="where">Failed at: <span class="mono">And the candidate clicks the LinkedIn share icon</span></div>
+        <div class="err mono">Error: expect(received).toBeTruthy()
+Received: false</div>
+        
+      </td>
+      <td class="mono">BUG-007</td>
+      <td class="num">9.6s</td>
+    </tr><tr>
+      <td class="tc">TC058</td>
+      <td>
+        <div class="scn">TC058 — Download uploaded CV in PDF format</div>
+        <div class="where">Upload Candidate CV &middot; features/dashboard/upload_candidate_cv.feature:76</div>
+        <div class="where">Failed at: <span class="mono">Then the CV should be downloaded as a PDF file</span></div>
+        <div class="err mono">Error: expect(received).toBeTruthy()
+Received: false</div>
+        
+      </td>
+      <td class="mono">BUG-008</td>
+      <td class="num">3.4s</td>
+    </tr><tr>
+      <td class="tc">TC057</td>
+      <td>
+        <div class="scn">TC057 — Only LinkedIn is available as a CV sharing option</div>
+        <div class="where">Upload Candidate CV &middot; features/dashboard/upload_candidate_cv.feature:69</div>
+        <div class="where">Failed at: <span class="mono">Then only the LinkedIn social media icon should be visible in the share section</span></div>
+        <div class="err mono">Error: expect(received).toBeTruthy()
+Received: false</div>
+        
+      </td>
+      <td class="mono">BUG-003, BUG-007</td>
+      <td class="num">8.0s</td>
+    </tr><tr>
+      <td class="tc">TC059</td>
+      <td>
+        <div class="scn">TC059 — Download uploaded CV in DOC format</div>
+        <div class="where">Upload Candidate CV &middot; features/dashboard/upload_candidate_cv.feature:86</div>
+        <div class="where">Failed at: <span class="mono">Then the CV should be downloaded as a DOC file</span></div>
+        <div class="err mono">Error: expect(received).toBeTruthy()
+Received: false</div>
+        
+      </td>
+      <td class="mono">BUG-008</td>
+      <td class="num">3.4s</td>
+    </tr><tr>
+      <td class="tc">TC_AA001</td>
+      <td>
+        <div class="scn">TC_AA001 — All Applicants page lists applications across all employer job posts</div>
+        <div class="where">Employer All Applicants &middot; features/employer/all_applicants.feature:14</div>
+        <div class="where">Failed at: <span class="mono">And each application entry should display the job title</span></div>
+        <div class="err mono">Error: expect(received).toBeTruthy()
+Received: false</div>
+        
+      </td>
+      <td class="mono">BUG-006</td>
+      <td class="num">2.7s</td>
+    </tr><tr>
+      <td class="tc">TC_SI001</td>
+      <td>
+        <div class="scn">TC_SI001 — Shortlisted CVs page lists all shortlisted candidates with required details</div>
+        <div class="where">Employer Shortlisted CVs and Scheduled Interviews &middot; features/employer/shortlisted_cvs_and_interviews.feature:21</div>
+        <div class="where">Failed at: <span class="mono">And each shortlisted entry should display the applied job title</span></div>
+        <div class="err mono">Error: expect(received).toBeTruthy()
+Received: false</div>
+        
+      </td>
+      <td class="mono">BUG-006</td>
+      <td class="num">2.5s</td>
+    </tr><tr>
+      <td class="tc">TC_SI002</td>
+      <td>
+        <div class="scn">TC_SI002 — Employer can initiate interview scheduling from the Shortlisted CVs page</div>
+        <div class="where">Employer Shortlisted CVs and Scheduled Interviews &middot; features/employer/shortlisted_cvs_and_interviews.feature:29</div>
+        <div class="where">Failed at: <span class="mono">And the form should contain an attendee email field</span></div>
+        <div class="err mono">Error: expect(received).toBeTruthy()
+Received: false</div>
+        
+      </td>
+      <td class="mono">BUG-005</td>
+      <td class="num">3.5s</td>
+    </tr>
+  </tbody></table>
+</section>
+
+<section>
+  <h2>4. Skipped scenarios (2)</h2>
+  <p class="sub">Every skip below is deliberate — a step definition returned
+  <span class="mono">'skipped'</span>, which aborts the scenario and marks all remaining
+  steps skipped. None were skipped by tag or by the runner.</p>
+  <table>
+    <thead><tr><th style="width:74px">Test ID</th><th>Scenario, skip point &amp; reason</th><th style="width:96px">Blocked by</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="tc">TC_VN002</td>
+        <td>
+          <div class="scn">TC_VN002 — Verification succeeds when valid VNIN credentials are submitted</div>
+          <div class="where">Candidate VNIN Verification &middot; features/candidate/vnin_verification.feature:22</div>
+          <div class="where">Skipped at: <span class="mono">Then the verification should succeed</span></div>
+          <div class="why">Step returns "skipped" when no success banner appears. The stated reason is "needs a real NIMC-registered VNIN". Network capture disproves this: submitting the form fires exactly one request — POST payarenaverification.com/api/account/token — which returns auth_token: null, so the VNIN is never sent to the provider at all. The failure is identical for any VNIN, valid or not.</div>
+          <div class="verdict">MISCLASSIFIED — real product defect, not environmental</div>
+        </td>
+        <td>BUG-013 (VNIN integration returns null auth token)</td>
+      </tr><tr>
+        <td class="tc">TC_VN005</td>
+        <td>
+          <div class="scn">TC_VN005 — Verified badge is displayed on the dashboard after successful VNIN verification</div>
+          <div class="where">Candidate VNIN Verification &middot; features/candidate/vnin_verification.feature:40</div>
+          <div class="where">Skipped at: <span class="mono">Given the candidate has successfully completed VNIN verification</span></div>
+          <div class="why">Precondition step returns "skipped" when no Verified badge is present. The account can never become verified because the verification flow itself is broken, so this precondition is permanently unsatisfiable.</div>
+          <div class="verdict">MISCLASSIFIED — blocked by product defect</div>
+        </td>
+        <td>BUG-013 (blocked downstream of TC_VN002)</td>
+      </tr>
+    </tbody></table>
+  
+</section>
+
+<section class="page-break">
+  <h2>5. Investigation: the VNIN skips are masking a production defect</h2>
+  <div class="callout">
+    <h3>TC_VN002 / TC_VN005 — reclassify from "environmental" to P1 defect</h3>
+    <p>Both scenarios skip with the justification that they need a <i>real, NIMC-registered
+    VNIN</i>, implying an unavoidable test-data gap. Live network capture of the submit
+    disproves that.</p>
+    <p>Clicking <b>Verify</b> produces exactly one network request:</p>
+    <div class="err mono">POST https://payarenaverification.com/api/account/token
+&#8594; 200 {"success":true,"description":"Successful",
+     "data":{"auth_token":null,"access_tokenexpire":"..."}}
+
+UI result: "Failed — VNIN Verification failed"</div>
+    <ul>
+      <li>The VNIN number is <b>never transmitted</b> — no lookup request is ever made.</li>
+      <li>The flow dies at token acquisition because the provider returns
+          <span class="mono">auth_token: null</span> alongside <span class="mono">success: true</span>.</li>
+      <li>Therefore a genuine registered VNIN would fail <i>identically</i>. VNIN verification
+          is broken for <b>every user in production</b>.</li>
+      <li>TC_VN005 is collateral: its precondition can never be met while TC_VN002 cannot pass.</li>
+    </ul>
+  </div>
+
+  <h3>Two further issues found during the same investigation</h3>
+  <ul>
+    <li><b>Credential exposure (security).</b> The token request ships the verification
+        provider's admin username and password in plaintext from the browser, readable by any
+        visitor via devtools. This is independently reportable, and plausibly explains the null
+        token if those credentials were rotated after leaking.</li>
+    <li><b>TC_VN003 is a false green.</b> It asserts "invalid VNIN &rarr; error message" and passes —
+        but the error it observes comes from the broken integration, not from VNIN validation.
+        It would pass with a valid VNIN too, so it currently proves nothing.</li>
+  </ul>
+
+  <h3>Test-side defects in TC_VN005 itself</h3>
+  <ul>
+    <li>Its final <span class="mono">Then</span> logs a warning and asserts nothing — the scenario
+        could never fail even with the precondition met.</li>
+    <li>The precondition checks for the badge on the VNIN page, before the
+        <span class="mono">When</span> navigates to the dashboard where the badge would appear.</li>
+    <li>The selector <span class="mono">*:has-text("Verified")</span> matches ancestors up to
+        <span class="mono">&lt;html&gt;</span>, so it can false-positive on any page containing that word.</li>
+  </ul>
+
+  <h3>TC070 / TC071 / TC072 — AI CV generation (BUG-015)</h3>
+  <p>The AI endpoint proxies to <b>Google Gemini 2.5 Flash</b>. When the model replies
+  <b>503 Service Unavailable</b>, Jobrator neither retries nor degrades — it returns 500 and the UI
+  shows a dead-end <b>"Error writing via AI"</b> modal that discards the user's typed input.</p>
+  <div class="err mono">POST https://api.jobrator.com/api/account/ai/generate
+&#8594; 500 {"message":"Failed to generate text",
+     "error":"[GoogleGenerativeAI Error]: ... gemini-2.5-flash:generateContent:
+      [503 Service Unavailable] This model is currently experiencing high demand.
+      Spikes in demand are usually temporary. Please try again later."}</div>
+  <ul>
+    <li><b>Intermittent, roughly 1 attempt in 3.</b> A three-attempt probe gave 500 / 200 / 200; a
+        sequential re-run of the three scenarios gave 2 failed / 1 passed. The endpoint is wired
+        correctly — the defect is purely the unhandled upstream 503.</li>
+    <li>This is a <b>paid, subscription-gated feature</b> failing for a third of attempts, with no
+        retry button and no preservation of what the user typed.</li>
+    <li><b>Secondary:</b> the 500 body forwards Gemini's raw error verbatim, disclosing the model,
+        provider and upstream URL to the client.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>6. Recommended actions</h2>
+  <table>
+    <thead><tr><th style="width:26px">#</th><th>Action</th><th style="width:78px">Owner</th><th style="width:58px">Priority</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><b>Rotate the <span class="mono">admin@jobrator.com</span> provider credentials now</b> (BUG-014) and treat them as compromised — they have been publicly readable for as long as the code has been deployed. Then move the token exchange server-side.</td><td>Security</td><td>P1</td></tr>
+      <tr><td>2</td><td>Fix <b>BUG-013</b> — VNIN verification returns <span class="mono">auth_token: null</span>; the feature is non-functional for every user. May be resolved by the BUG-014 rotation.</td><td>Backend</td><td>P1</td></tr>
+      <tr><td>3</td><td>Fix <b>BUG-015</b> — add bounded retry with backoff around the Gemini call, stop forwarding the provider error body, and keep the user's input on failure.</td><td>Backend</td><td>High</td></tr>
+      <tr><td>4</td><td>Convert TC_VN002's <span class="mono">return 'skipped'</span> into a hard assertion so BUG-013 shows as a failure, not a silent skip. Fix TC_VN005's vacuous <span class="mono">Then</span> and selector; retarget TC_VN003 so it stops passing for the wrong reason.</td><td>QA</td><td>P2</td></tr>
+      <tr><td>5</td><td>Fix the two test bugs — TC_CP004 (pick an unselected skill) and TC_EMSG003 (thread-free account, or drop the scenario).</td><td>QA</td><td>P2</td></tr>
+      <tr><td>6</td><td>Investigate the four flaky scenarios under parallelism (TC_EREG012, TC_ACC006, TC_AJP002, TC_REG005) — all passed sequentially, so the suite's <span class="mono">parallel: 2</span> setting is the likely factor.</td><td>QA</td><td>P3</td></tr>
+      <tr><td>7</td><td>Adopt the standing rule: a skip requires a linked bug ID or a documented data dependency. "Environmental" without evidence is not acceptable.</td><td>QA</td><td>Process</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>Appendix A — Open defect log (bugs/)</h2>
+  <table>
+    <thead><tr><th style="width:66px">ID</th><th>Title</th><th style="width:150px">Tests re-confirming it</th></tr></thead>
+    <tbody>
+      <tr><td class="tc">BUG-001</td><td>Password reset email delivery is intermittent / exceeds 180 s</td>
+            <td class="mono"><span class="where">—</span></td></tr><tr><td class="tc">BUG-002</td><td>Admin Psychometric Test environment has no exams (empty data set)</td>
+            <td class="mono">TC_AT003</td></tr><tr><td class="tc">BUG-003</td><td>`GET /api/account/candidate` returns 500 (dashboard profile fails to load)</td>
+            <td class="mono">TC057</td></tr><tr><td class="tc">BUG-004</td><td>Applying without selecting a CV returns HTTP 500 and a misleading "You can apply to a job Only Once!" error</td>
+            <td class="mono"><span class="where">—</span></td></tr><tr><td class="tc">BUG-005</td><td>Interview scheduling modal has no interview format/type field</td>
+            <td class="mono">TC_SI002</td></tr><tr><td class="tc">BUG-006</td><td>Shortlisted CVs entry does not show the job the candidate applied to</td>
+            <td class="mono">TC_AA001, TC_SI001</td></tr><tr><td class="tc">BUG-007</td><td>CV manager has no LinkedIn (or any) share control</td>
+            <td class="mono">TC056, TC057</td></tr><tr><td class="tc">BUG-008</td><td>CV download returns a 404 JSON error body instead of the uploaded document</td>
+            <td class="mono">TC058, TC059</td></tr><tr><td class="tc">BUG-009</td><td>"Job Alerts" is a read-only notification feed: no keyword alert creation and no delete</td>
+            <td class="mono">TC_SJ004, TC_SJ005, TC_SJ006</td></tr><tr><td class="tc">BUG-010</td><td>Employment Type does not offer "Internship"</td>
+            <td class="mono"><span class="where">—</span></td></tr><tr><td class="tc">BUG-011</td><td>Job detail apply control: stale `/subscription` href, and a malformed applied-jobs pagination request</td>
+            <td class="mono"><span class="where">—</span></td></tr><tr><td class="tc">BUG-012</td><td>Setting "Job Status" to Draft on the Edit Job form is silently ignored (no way to deactivate a job)</td>
+            <td class="mono"><span class="where">—</span></td></tr><tr><td class="tc">BUG-013</td><td>VNIN verification is broken for all users: provider returns a null auth token</td>
+            <td class="mono"><span class="where">—</span></td></tr><tr><td class="tc">BUG-014</td><td>Verification provider's admin credentials are exposed in client-side code</td>
+            <td class="mono"><span class="where">—</span></td></tr><tr><td class="tc">BUG-015</td><td>AI CV generation fails intermittently: upstream Gemini 503 is surfaced as a dead-end error</td>
+            <td class="mono">TC070, TC071, TC072</td></tr>
+    </tbody>
+  </table>
+</section>

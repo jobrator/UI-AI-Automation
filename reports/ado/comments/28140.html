@@ -1,0 +1,15 @@
+<b>Retest — 2026-08-19 — PASSING (appears fixed)</b><br><br>
+Retested on https://jobrator.com/dashboard/cv-manager as a candidate.<br><br>
+<b>Steps:</b> cleared existing CVs, uploaded a valid PDF CV, dismissed the success
+popup, then counted the CV list entries <b>without</b> reloading the page.<br><br>
+<pre>CV count before upload            : 0
+Upload success popup shown        : true
+CV count WITHOUT a page refresh   : 1
+CV count AFTER a page refresh     : 1</pre>
+The uploaded CV appeared in the list immediately, with no manual refresh needed,
+and the count was unchanged by the subsequent reload.<br><br>
+<b>Supporting automated coverage (both passed in the same session):</b><br>
+TC051 — Upload a valid PDF CV from the dashboard — PASSED<br>
+TC052 — CV upload accepts a Word document (DOCX) — PASSED<br><br>
+<b>Verdict:</b> Could not reproduce. Suggest moving to Resolved/Closed unless the
+original report was against the mobile app, in which case it still needs a device retest.

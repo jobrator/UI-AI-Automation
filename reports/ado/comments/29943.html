@@ -1,0 +1,9 @@
+<b>Retest — 2026-08-19 — PASSING on web (mobile not covered)</b><br><br><b>Scope caveat — please read before closing:</b> this ticket was filed against the <b>mobile app</b> (the repro steps use mobile gestures: "user tap on…", "navigate to more menu"). The available automation stack (Playwright + Cucumber, and the Reqnroll mirror) is <b>web-only — there is no Appium/mobile harness in this repo</b>, so the mobile app itself was <b>not</b> retested. The verdict below covers the equivalent <b>web</b> journey on https://jobrator.com only. If the defect was mobile-specific, this result does not clear it — it needs a retest on the device.<br><br>
+<b>Web equivalent retested:</b> CV upload via
+https://jobrator.com/dashboard/cv-manager.<br><br>
+<b>Result — both passed:</b><br>
+TC051 — Upload a valid PDF CV from the dashboard — <b>PASSED</b><br>
+TC052 — CV upload accepts a Word document (DOCX) format — <b>PASSED</b><br><br>
+A separate manual probe confirmed the uploaded CV also appears in the list without a
+page refresh (see #28140, also passing).<br><br>
+<b>Verdict:</b> CV upload works on web. Needs a device retest to close for mobile.

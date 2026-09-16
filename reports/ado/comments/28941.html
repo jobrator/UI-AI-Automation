@@ -1,0 +1,28 @@
+<b>Retest — 2026-08-19 — STILL FAILING (in-app); email delivery NOT verifiable</b><br><br>
+<b>What was verified:</b> logged in as a candidate that <b>already has 10 job
+applications</b> on record, and read the notification feed
+(https://jobrator.com/dashboard/notifications) plus the underlying API
+<code>GET /api/account/candidate-notifications/?page=1&amp;limit=10</code> (HTTP 200).<br><br>
+<b>Result — all 10 notification records returned:</b>
+<pre>2026-07-27 18:35:51  Job Recommendation
+2026-07-27 18:35:29  Job Recommendation
+2026-07-27 18:35:27  Message received from Nikolaus, Wehner and Gleichner Test Inc
+2026-07-27 18:34:50  Job Recommendation
+2026-07-27 18:34:31  Job Recommendation
+2026-07-27 18:34:07  Job Recommendation
+2026-07-27 18:33:43  Job Recommendation
+2026-07-27 18:33:27  Job Recommendation
+2026-07-27 10:30:08  Job Recommendation
+2026-07-27 10:11:16  Job Recommendation</pre>
+Keyword scan over the raw notification records:
+<code>"skill test" = false</code>, <code>"skill_test" = false</code>,
+<code>"assessment" = false</code>. <b>No skill-test notification of any kind exists</b>
+for an account that has submitted applications.<br><br>
+<b>Honest limitation:</b> the shared test candidate uses a personal Gmail inbox that this
+retest has no access to, so <b>whether the email itself is sent could not be directly
+confirmed or denied</b>. The in-app evidence above is consistent with the original
+report (no skill-test notification is generated on application submission), but a
+definitive email verdict needs either a mailbox the QA team controls
+(e.g. a Mailinator candidate) or a look at the mail-provider send log.<br><br>
+<b>Verdict:</b> Not demonstrably fixed. Recommend re-testing with a QA-controlled inbox
+before closing. See also #29062 (expiry reminders), which fails on the same feed.

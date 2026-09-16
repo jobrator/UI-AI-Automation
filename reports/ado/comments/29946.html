@@ -1,0 +1,12 @@
+<b>Retest — 2026-08-19 — PASSING on web (mobile not covered)</b><br><br><b>Scope caveat — please read before closing:</b> this ticket was filed against the <b>mobile app</b> (the repro steps use mobile gestures: "user tap on…", "navigate to more menu"). The available automation stack (Playwright + Cucumber, and the Reqnroll mirror) is <b>web-only — there is no Appium/mobile harness in this repo</b>, so the mobile app itself was <b>not</b> retested. The verdict below covers the equivalent <b>web</b> journey on https://jobrator.com only. If the defect was mobile-specific, this result does not clear it — it needs a retest on the device.<br><br>
+<b>Web equivalent retested:</b> employer company-profile edit + save on
+https://jobrator.com/dashboard/company-profile.<br><br>
+<b>Result:</b> TC_ECP002 — Employer can update company profile information and see a
+success message — <b>PASSED</b>. The company description was updated to
+"We are an innovative technology firm." and saved successfully.<br><br>
+<b>Unrelated observation worth a separate ticket:</b> while on the employer company-profile
+page the browser console logged
+<code>400 Bad Request — "Error fetching API (Candidate Account Details)"</code>.
+It did not block the save, but the employer profile page should not be calling a
+candidate account endpoint.<br><br>
+<b>Verdict:</b> Employer profile editing works on web. Needs a device retest to close for mobile.

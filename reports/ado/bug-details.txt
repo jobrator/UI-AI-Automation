@@ -1,0 +1,125 @@
+
+================ #29943 [Bug] [New]
+TITLE: CVUpload
+AREA: JOBRATOR  TAGS: -
+REPRO STEPS:
+@tag1 
+Scenario: Verify Candidate CV Upload 
+    When user tap on the candidate Get Started button 
+    And user navigate to "myjob" menu 
+    And user select candidate signin option 
+    And "Candidate" login with email "valid_email" and password "valid_password" 
+    And user tap on signin button 
+    And user navigate to "more" menu 
+    And I tap on the CV Manager button 
+    And I tap on the CV Upload button 
+    And I am redirected to CV file location on my device 
+    And I select the document 
+    And I tap Submit button  
+    Then my CV should be uploaded successfully
+
+================ #29944 [Bug] [New]
+TITLE: ChangePassword (×3)
+AREA: JOBRATOR  TAGS: -
+REPRO STEPS:
+@tag1
+Scenario: Verify Candidate Can Change Password
+ 
+	When user tap on the Change Password option
+ 
+	And user enter current password "valid_password"
+ 
+	And user enter new password "random_password"
+ 
+	And user confirm new password "random_password"
+ 
+	And user tap on the Update Password button
+ 
+	Then user should see password updated successfully popup
+ 
+	And user revert password back to the original
+
+================ #29945 [Bug] [New]
+TITLE: candidate invalid-credential modal
+AREA: JOBRATOR  TAGS: -
+REPRO STEPS:
+(empty)
+
+================ #29946 [Bug] [New]
+TITLE: VerifyEmployerCanEditProfile
+AREA: JOBRATOR  TAGS: -
+REPRO STEPS:
+@tag1 
+Scenario: Verify Employer Can Edit Profile 
+    When user tap on the company Profile 
+    And user edit Company Name with "New Company Name" 
+    And user edit About Company with "New Company Description" 
+    And user edit Company Location with "New Company Location" 
+    And user tap on Save button 
+    And user tap OK on profile Updated Successfully popup screen 
+    Then user should see more screen
+
+================ #29947 [Bug] [New]
+TITLE: VerifyEmployerCannotLoginWithInvalidCredential
+AREA: JOBRATOR  TAGS: -
+REPRO STEPS:
+Scenario Outline: Verify Employer Cannot Login with wrong formatted credential 
+    When user tap on the company Get Started button 
+    And user navigate to "application" menu  
+    And user select employer signin option 
+    And "Employer" login with email "<Email>" and password "<Password>" 
+    And user tap on signin button 
+    Then user should error on the login screen
+
+================ #29981 [Bug] [New]
+TITLE: Login API leaks internal exception code (E_INVALID_AUTH_PASSWORD) confirming password mismatch — enables credential/account enumeration
+AREA: JOBRATOR  TAGS: Tosin Adeleye
+REPRO STEPS:
+Feature: Login error responses must not leak the authentication failure reason
+
+ 
+  Precondition
+ 
+    Given the Jobrator login API "POST https://api.jobrator.com/api/login" is reachable
+ 
+    And a valid registered candidate email exists
+ 
+
+ 
+  
+ 
+  Scenario 1: Wrong password on a real account leaks an internal exception code
+ 
+    Given the request body contains a registered email and profile "Candidate"
+ 
+    When the user submits the login request with an incorrect password
+ 
+    Then the response status should be 401 Unauthorized
+ 
+    And the response body should contain a generic message only
+ 
+    But the response body actually exposes the field "exception"
+ 
+    And that field reveals "E_INVALID_AUTH_PASSWORD: Password mis-match"
+ 
+    # ^ Actual (defect). Expected: no "exception" field, no internal error code.
+ 
+
+ 
+  
+ 
+  Scenario 2: Wrong password and unknown account must be indistinguishable
+ 
+    When the user submits a wrong password for a registered email
+ 
+    And the user submits any password for an unregistered email
+ 
+    Then both responses should return the same HTTP status code
+ 
+    And both responses should return a byte-identical error body
+ 
+    And neither response should reveal whether the account exists
+ 
+    # ^ Currently the registered-email case returns the verbose "exception",
+ 
+    #   so the two responses differ — enabling enumeration.
