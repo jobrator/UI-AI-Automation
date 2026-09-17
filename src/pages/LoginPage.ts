@@ -77,13 +77,26 @@ export class LoginPage extends BasePage {
 
   async navigate(): Promise<void> {
     await this.lib.navigateTo(this.url('/login'));
-    // Always click the Candidate tab to ensure the correct login form is active
+    await this.selectAccountTypeTab();
+    await this.lib.waitForElement(this.emailInput);
+  }
+
+  /**
+   * Select this page's account-type tab — Candidate here, overridden to Employer
+   * in EmployerLoginPage.
+   *
+   * The login form submits nothing until an account type is chosen: without it
+   * the API is never called and the page raises "Please select Candidate or
+   * Employer before logging in". Flows that reach /login by a route other than
+   * `navigate()` (e.g. the site-header Login link in TC057) must still do this,
+   * so it lives in its own method and is safe to call more than once.
+   */
+  protected async selectAccountTypeTab(): Promise<void> {
     const candidateButton = 'button:has-text("Candidate")';
     if (await this.lib.isVisible(candidateButton)) {
       await this.lib.click(candidateButton);
       await this.page.waitForTimeout(500);
     }
-    await this.lib.waitForElement(this.emailInput);
   }
 
   async isLoaded(): Promise<boolean> {
@@ -114,6 +127,7 @@ export class LoginPage extends BasePage {
    * Does NOT assert success; callers are responsible for assertions.
    */
   async login(email: string, password: string): Promise<void> {
+    await this.selectAccountTypeTab();
     await this.enterEmail(email);
     await this.enterPassword(password);
     // The "checkbox-ready" input is hidden (CSS) so Playwright's check() fails even with force.
@@ -154,16 +168,47 @@ export class LoginPage extends BasePage {
   }
 
   /**
+   * Dismiss the SweetAlert2 error popup a failed login raises.
+   *
+   * Its backdrop (`.swal2-container`) covers the whole viewport and intercepts
+   * pointer events, so the next submit click times out unless the popup is
+   * closed first.
+   */
+  async dismissAuthPopup(): Promise<void> {
+    const container = this.page.locator('.swal2-container');
+    if (!(await container.first().isVisible().catch(() => false))) return;
+
+    const confirm = this.page.locator('.swal2-confirm').filter({ visible: true }).first();
+    if (await confirm.isVisible().catch(() => false)) {
+      await confirm.click({ timeout: 5000 }).catch(() => { /* fall through to Escape */ });
+    } else {
+      await this.page.keyboard.press('Escape').catch(() => { /* ignore */ });
+    }
+    await container.first().waitFor({ state: 'hidden', timeout: 5000 }).catch(() => { /* ignore */ });
+  }
+
+  /**
    * Attempt to brute-force login — submits wrong credentials N times.
    * Used in account-lockout security scenarios.
+   *
+   * Goes through the full `login()` flow each time (the hidden "checkbox-ready"
+   * input has to be ticked or the form never reaches the API), and clears the
+   * SweetAlert2 error popup between attempts so every attempt actually submits.
    */
   async attemptLoginMultipleTimes(email: string, wrongPassword: string, attempts: number): Promise<void> {
     for (let i = 0; i < attempts; i++) {
       console.log(`[LoginPage] Brute-force attempt ${i + 1}/${attempts}`);
-      await this.enterEmail(email);
-      await this.enterPassword(wrongPassword);
-      await this.clickLoginButton();
-      await this.lib.waitMs(800);
+      await this.dismissAuthPopup();
+      await this.login(email, wrongPassword);
+      // The popup only appears once the auth call comes back, which can be well
+      // after a fixed wait — so wait for it rather than guessing, or it pops up
+      // mid-click on the next attempt and swallows the submit.
+      await this.page
+        .locator('.swal2-container')
+        .first()
+        .waitFor({ state: 'visible', timeout: 10000 })
+        .catch(() => { /* no popup (e.g. rate-limited silently) — carry on */ });
+      await this.dismissAuthPopup();
     }
   }
 

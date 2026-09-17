@@ -16,7 +16,7 @@ import * as fs from 'fs';
 const ORG = 'giftrete';
 const PROJECT = 'JOBRATOR';
 const TEAM = 'JOBRATOR Team';
-const ITERATION = 'Sprint 54';
+const ITERATION = process.env.ADO_ITERATION || 'Sprint 55';
 const BOARD_URL =
   `https://dev.azure.com/${ORG}/${PROJECT}/_sprints/taskboard/` +
   `${encodeURIComponent(TEAM)}/${PROJECT}/${encodeURIComponent(ITERATION)}`;
@@ -164,7 +164,7 @@ async function fetchSprintItems(ctx: BrowserContext) {
       }))
       .sort((a, b) => a.id - b.id);
     fs.writeFileSync(
-      path.join(OUT_DIR, 'sprint54.json'),
+      path.join(OUT_DIR, `${ITERATION.replace(/\s+/g, '').toLowerCase()}.json`),
       JSON.stringify({ iteration: iteration.path, rows }, null, 2),
     );
     console.log(`\nIteration: ${iteration.path}  (${rows.length} work items)\n`);
@@ -282,7 +282,187 @@ async function fetchSprintItems(ctx: BrowserContext) {
     return;
   }
 
-  console.log('usage: ado.ts login | list | details <ids...> | comment <id> <file>');
+  if (cmd === 'bugs') {
+    // Every Bug in the project that is not Closed/Removed — the duplicate check
+    // has to look wider than the current sprint, since an existing report may
+    // sit in an earlier iteration or the backlog.
+    const { ctx } = await open(true);
+    const wiql = await ctx.request.post(
+      `https://dev.azure.com/${ORG}/${PROJECT}/_apis/wit/wiql?api-version=7.1`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'X-TFS-FedAuthRedirect': 'Suppress',
+        },
+        data: {
+          query:
+            `SELECT [System.Id] FROM WorkItems ` +
+            `WHERE [System.TeamProject] = '${PROJECT}' ` +
+            `AND [System.WorkItemType] = 'Bug' ` +
+            `AND [System.State] NOT IN ('Closed', 'Removed', 'Done') ` +
+            `ORDER BY [System.Id] DESC`,
+        },
+      },
+    );
+    const body = await wiql.text();
+    if (!wiql.ok()) {
+      console.log(`HTTP ${wiql.status()} running WIQL`);
+      console.log(body.slice(0, 600));
+      await ctx.close();
+      process.exit(5);
+    }
+    const ids = (JSON.parse(body).workItems || []).map((w: any) => w.id);
+    console.log(`\n${ids.length} open Bug work items in ${PROJECT}\n`);
+    const rows: any[] = [];
+    for (let i = 0; i < ids.length; i += 190) {
+      const batch = await api(
+        ctx,
+        `https://dev.azure.com/${ORG}/_apis/wit/workitems?ids=${ids.slice(i, i + 190).join(',')}` +
+          `&fields=System.Id,System.Title,System.State,System.Tags,System.AreaPath,System.IterationPath` +
+          `&api-version=7.1`,
+      );
+      for (const w of batch.value || []) {
+        const f = w.fields;
+        rows.push({
+          id: w.id,
+          title: f['System.Title'],
+          state: f['System.State'],
+          iteration: f['System.IterationPath'],
+          tags: f['System.Tags'] ?? null,
+        });
+        console.log(
+          `  #${w.id}  [${f['System.State']}]  ${f['System.Title']}` +
+            `   {${f['System.IterationPath']}}`,
+        );
+      }
+    }
+    fs.writeFileSync(path.join(OUT_DIR, 'open-bugs.json'), JSON.stringify(rows, null, 2));
+    await ctx.close();
+    return;
+  }
+
+  if (cmd === 'create') {
+    // create <jsonFile> — the file holds the Bug's fields; see bugs/ado/*.json.
+    const [file] = rest;
+    if (!file) {
+      console.log('usage: ado.ts create <jsonFile>');
+      process.exit(1);
+    }
+    const spec = JSON.parse(fs.readFileSync(path.resolve(file), 'utf8'));
+    const { ctx } = await open(true);
+
+    // Resolve the real iteration path rather than hard-coding the separator.
+    const base = `https://dev.azure.com/${ORG}/${PROJECT}/${encodeURIComponent(TEAM)}/_apis/work`;
+    const iterations = await api(ctx, `${base}/teamsettings/iterations?api-version=7.1`);
+    const iter = (iterations.value || []).find(
+      (i: any) => i.name === ITERATION || String(i.path || '').endsWith(ITERATION),
+    );
+    if (!iter) throw new Error(`iteration "${ITERATION}" not found`);
+
+    const patch: any[] = [
+      { op: 'add', path: '/fields/System.Title', value: spec.title },
+      { op: 'add', path: '/fields/System.AreaPath', value: spec.areaPath ?? PROJECT },
+      { op: 'add', path: '/fields/System.IterationPath', value: iter.path },
+      { op: 'add', path: '/fields/Microsoft.VSTS.TCM.ReproSteps', value: spec.reproSteps },
+    ];
+    if (spec.systemInfo) {
+      patch.push({ op: 'add', path: '/fields/Microsoft.VSTS.TCM.SystemInfo', value: spec.systemInfo });
+    }
+    if (spec.severity) {
+      patch.push({ op: 'add', path: '/fields/Microsoft.VSTS.Common.Severity', value: spec.severity });
+    }
+    if (spec.priority) {
+      patch.push({ op: 'add', path: '/fields/Microsoft.VSTS.Common.Priority', value: spec.priority });
+    }
+    if (spec.tags) patch.push({ op: 'add', path: '/fields/System.Tags', value: spec.tags });
+
+    const r = await ctx.request.post(
+      `https://dev.azure.com/${ORG}/${PROJECT}/_apis/wit/workitems/$Bug?api-version=7.1`,
+      {
+        headers: {
+          'Content-Type': 'application/json-patch+json',
+          Accept: 'application/json',
+          'X-TFS-FedAuthRedirect': 'Suppress',
+        },
+        data: patch,
+      },
+    );
+    const body = await r.text();
+    if (!r.ok()) {
+      console.log(`HTTP ${r.status()} creating bug`);
+      console.log(body.slice(0, 900));
+      await ctx.close();
+      process.exit(6);
+    }
+    const created = JSON.parse(body);
+    console.log(`OK created Bug #${created.id} — ${spec.title}`);
+    console.log(`   ${created._links?.html?.href ?? ''}`);
+    await ctx.close();
+    return;
+  }
+
+  if (cmd === 'tags') {
+    // The project's existing tag definitions. Adding a tag that already exists
+    // needs no special permission; minting a new one needs "create tags"
+    // (TF401289 if the account lacks it).
+    const { ctx } = await open(true);
+    const t = await api(
+      ctx,
+      `https://dev.azure.com/${ORG}/${PROJECT}/_apis/wit/tags?api-version=7.1-preview.1`,
+    );
+    const names = (t.value || []).map((x: any) => x.name).sort();
+    console.log(`\n${names.length} tags defined in ${PROJECT}:\n`);
+    for (const n of names) console.log(`  ${n}`);
+    await ctx.close();
+    return;
+  }
+
+  if (cmd === 'tag') {
+    // tag "<tag name>" <ids...> — appends the tag, keeping any already set.
+    const [tagName, ...ids] = rest;
+    if (!tagName || !ids.length) {
+      console.log('usage: ado.ts tag "<tag name>" <ids...>');
+      process.exit(1);
+    }
+    const { ctx } = await open(true);
+    for (const id of ids) {
+      const cur = await api(
+        ctx,
+        `https://dev.azure.com/${ORG}/_apis/wit/workitems/${id}?fields=System.Tags&api-version=7.1`,
+      );
+      const existing = String(cur.fields?.['System.Tags'] ?? '')
+        .split(';')
+        .map((t: string) => t.trim())
+        .filter(Boolean);
+      if (existing.some((t: string) => t.toLowerCase() === tagName.toLowerCase())) {
+        console.log(`  #${id} already tagged "${tagName}" — skipped`);
+        continue;
+      }
+      const value = [...existing, tagName].join('; ');
+      const r = await ctx.request.patch(
+        `https://dev.azure.com/${ORG}/${PROJECT}/_apis/wit/workitems/${id}?api-version=7.1`,
+        {
+          headers: {
+            'Content-Type': 'application/json-patch+json',
+            Accept: 'application/json',
+            'X-TFS-FedAuthRedirect': 'Suppress',
+          },
+          data: [{ op: 'add', path: '/fields/System.Tags', value }],
+        },
+      );
+      const body = await r.text();
+      if (!r.ok()) {
+        console.log(`  #${id} HTTP ${r.status()} — ${body.slice(0, 250)}`);
+        continue;
+      }
+      console.log(`  #${id} tags -> ${JSON.parse(body).fields['System.Tags']}`);
+    }
+    await ctx.close();
+    return;
+  }
+
+  console.log('usage: ado.ts login | list | bugs | tags | tag "<name>" <ids...> | details <ids...> | comment <id> <file> | create <jsonFile>');
   process.exit(1);
 })().catch((e) => {
   console.error('FAILED:', e?.message || e);

@@ -109,6 +109,14 @@ export class PostJobPage extends BasePage {
       'input[name="title"], input[name="job_title"], form',
       { timeout: 15000 }
     ).catch(() => {});
+    // The Employment Type / Work Mode checkbox groups render after the text
+    // inputs; waiting only for `form` lets field-visibility checks run against a
+    // half-rendered form. Wait for the last group to be in the DOM (the inputs
+    // themselves are CSS-hidden, so wait for 'attached', not 'visible').
+    await this.page.waitForSelector(
+      'input[name="employmentTypes"], input[name="workMode"]',
+      { state: 'attached', timeout: 15000 }
+    ).catch(() => {});
     await this.page.waitForTimeout(500);
   }
 
@@ -132,22 +140,39 @@ export class PostJobPage extends BasePage {
   async isResponsibilitiesFieldVisible(): Promise<boolean> { return this.lib.isVisible(this.responsibilitiesField); }
   async isIndustryDropdownVisible(): Promise<boolean> { return this.lib.isVisible(this.industryDropdown); }
   async isSkillsFieldVisible(): Promise<boolean> { return this.lib.isVisible(this.skillsField); }
+  /**
+   * Employment Type is a checkbox group (`input[name="employmentTypes"]`) on the
+   * live form, not a <select>. The inputs are CSS-hidden behind styled labels, so
+   * assert on the group's visible labels — waiting for the group to render first,
+   * since it appears later than the form's text inputs.
+   */
   async isEmploymentTypeDropdownVisible(): Promise<boolean> {
     const hasSelect = await this.lib.isVisible(this.employmentTypeDropdown);
     if (hasSelect) return true;
+    await this.waitForCheckboxGroup('employmentTypes');
     return this.lib.isVisible(
       'input[type="radio"][name="jobType"], input[type="radio"][name="employment_type"], ' +
-      'input[type="radio"][name="job_type"], label:has-text("Full-time"), ' +
-      'label:has-text("Full Time"), label:has-text("Part-time"), label:has-text("Contract")'
+      'input[type="radio"][name="job_type"], label:has-text("Employment Type"), ' +
+      'label:has-text("Full-time"), label:has-text("Full Time"), ' +
+      'label:has-text("Part-time"), label:has-text("Contract")'
     );
   }
   async isWorkModeDropdownVisible(): Promise<boolean> {
     const hasSelect = await this.lib.isVisible(this.workModeDropdown);
     if (hasSelect) return true;
+    await this.waitForCheckboxGroup('workMode');
     return this.lib.isVisible(
       'input[type="radio"][name="workMode"], input[type="radio"][name="work_mode"], ' +
-      'label:has-text("Remote"), label:has-text("On-site"), label:has-text("Hybrid")'
+      'label:has-text("Work Mode"), label:has-text("Remote"), ' +
+      'label:has-text("On-site"), label:has-text("Hybrid")'
     );
+  }
+
+  /** Wait for a checkbox group to reach the DOM (its inputs are CSS-hidden). */
+  private async waitForCheckboxGroup(name: string): Promise<void> {
+    await this.page
+      .waitForSelector(`input[name="${name}"]`, { state: 'attached', timeout: 10000 })
+      .catch(() => { /* group may render differently; label check still decides */ });
   }
   async isOpeningDateVisible(): Promise<boolean> {
     const has = await this.lib.isVisible(this.openingDate);

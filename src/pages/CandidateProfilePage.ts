@@ -284,7 +284,33 @@ export class CandidateProfilePage extends BasePage {
     return this.lib.isVisible(this.cityDropdown);
   }
 
+  /**
+   * Remove a skill's existing tag from the multi-select, if it has one.
+   *
+   * react-select hides already-selected options from its menu, so searching for a
+   * skill the profile already carries returns an empty menu and the follow-up
+   * "select from the suggestions" step waits forever. Clearing the tag first makes
+   * the search → select → tag flow repeatable on an account that has accumulated
+   * skills from earlier runs.
+   */
+  private async removeSkillTagIfPresent(skill: string): Promise<void> {
+    const tag = this.page
+      .locator('.select__multi-value, [class*="multi-value"]')
+      .filter({ has: this.page.getByText(skill, { exact: true }) })
+      .first();
+    if (!(await tag.isVisible().catch(() => false))) return;
+
+    const remove = tag
+      .locator('.select__multi-value__remove, [class*="multi-value__remove"]')
+      .first();
+    if (await remove.isVisible().catch(() => false)) {
+      await remove.click().catch(() => { /* leave the tag; the search step reports it */ });
+      await this.page.waitForTimeout(500);
+    }
+  }
+
   async searchAndSelectSkill(skill: string): Promise<void> {
+    await this.removeSkillTagIfPresent(skill);
     // react-select: click the control to focus, then type into its inner input.
     const control = this.page
       .locator('.select__control, [class*="select__control"]')
