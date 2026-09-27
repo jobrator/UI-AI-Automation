@@ -4,7 +4,8 @@
       "Bash(npm run *)",
       "Bash(dotnet test *)",
       "Bash(dotnet build *)",
-      "Bash(BROWSER=chromium HEADLESS=true node node_modules/@cucumber/cucumber/bin/cucumber.js --dry-run --profile sequential features/dashboard/upload_candidate_cv.feature)"
+      "Bash(BROWSER=chromium HEADLESS=true node node_modules/@cucumber/cucumber/bin/cucumber.js --dry-run --profile sequential features/dashboard/upload_candidate_cv.feature)",
+      "Bash(npx ts-node src/scripts/subscribe_and_verify.ts:*)"
     ]
   }
 }

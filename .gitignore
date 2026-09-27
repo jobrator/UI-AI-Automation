@@ -9,6 +9,13 @@ reports/screenshots/
 reports/videos/
 reports/traces/
 reports/@rerun.txt
+# Byproducts of `npm run seed:subscription` and the ADO probe scripts
+reports/.chrome-profile-*/
+reports/subscribe/
+# Per-run mobile (Appium) output
+reports/mobile/
+# Rotated copies of the cucumber JSON
+reports/cucumber-report-prev-*.json
 
 # OS
 .DS_Store

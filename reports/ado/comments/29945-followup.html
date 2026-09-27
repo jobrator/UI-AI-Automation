@@ -1,0 +1,10 @@
+<b>Correction to my previous comment — retest status is PASSED ON WEB ONLY</b><br><br>
+My earlier comment invited closing this on the web result. Please disregard that.
+This bug's parent is <b>#29359 "[Testing] Regresion Test on Web and Mobile"</b>, and it was
+filed in the same batch as #29941–#29947, all of which have mobile-gesture repro steps —
+so it should be treated as carrying mobile scope.<br><br>
+The result stands for web: submitting invalid candidate credentials on
+https://jobrator.com/login renders a visible
+<code>.text-danger</code> message "Invalid credentials or profile", and TC003/TC004 both
+passed. But that is <b>web evidence only</b>.<br><br>
+<b>Status: Passed on Web. Mobile retest still required before this can be closed.</b>

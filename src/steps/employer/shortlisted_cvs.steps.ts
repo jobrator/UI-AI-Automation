@@ -30,27 +30,24 @@ Given('the employer has shortlisted at least one candidate',
     if (!/shortlist/i.test(url)) {
       await shortlistedPage.navigate();
     }
-    const hasShortlisted = await shortlistedPage.hasShortlistedCandidates();
+    let hasShortlisted = await shortlistedPage.hasShortlistedCandidates();
     if (!hasShortlisted) {
-      console.warn(
-        '[ShortlistedCVs] No shortlisted candidates found. ' +
-        'Attempting to shortlist a candidate from All Applicants page...'
-      );
+      // Self-heal: shortlist a real applicant, then re-check.
+      this.logMessage('[ShortlistedCVs] None shortlisted yet — shortlisting an applicant first.');
       const allApplicantsPage = new AllApplicantsPage(this.page);
       await allApplicantsPage.navigate();
-      const hasApplicants = await allApplicantsPage.hasApplicants();
-      if (!hasApplicants) {
-        console.warn('[ShortlistedCVs] No applicants found — cannot shortlist. Skipping scenario.');
-        console.warn('[ShortlistedCVs] Skipping — no test data available'); return;
-      }
+      expect(
+        await allApplicantsPage.hasApplicants(),
+        'Employer needs at least one applicant to shortlist (seeded by `npm run seed:full`).'
+      ).toBeTruthy();
       await allApplicantsPage.shortlistFirstApplicant();
       await shortlistedPage.navigate();
-      const hasShortlistedNow = await shortlistedPage.hasShortlistedCandidates();
-      if (!hasShortlistedNow) {
-        console.warn('[ShortlistedCVs] Still no shortlisted candidates after attempt. Skipping.');
-        console.warn('[ShortlistedCVs] Skipping — no test data available'); return;
-      }
+      hasShortlisted = await shortlistedPage.hasShortlistedCandidates();
     }
+    expect(
+      hasShortlisted,
+      'Employer should have at least one shortlisted candidate on the Shortlisted CVs page'
+    ).toBeTruthy();
     this.logMessage(
       `[ShortlistedCVs] Employer has ${await shortlistedPage.getShortlistedCount()} shortlisted candidate(s).`
     );
@@ -62,27 +59,23 @@ Given('the authenticated employer has shortlisted at least one candidate',
     // This is the same precondition for Rule 2 scenarios (interview scheduling)
     const shortlistedPage = getPage(this);
     await shortlistedPage.navigate();
-    const hasShortlisted = await shortlistedPage.hasShortlistedCandidates();
+    let hasShortlisted = await shortlistedPage.hasShortlistedCandidates();
     if (!hasShortlisted) {
-      console.warn(
-        '[ShortlistedCVs] No shortlisted candidates found for interview scheduling. ' +
-        'Attempting to shortlist first...'
-      );
+      this.logMessage('[ShortlistedCVs] None shortlisted yet — shortlisting an applicant first.');
       const allApplicantsPage = new AllApplicantsPage(this.page);
       await allApplicantsPage.navigate();
-      const hasApplicants = await allApplicantsPage.hasApplicants();
-      if (!hasApplicants) {
-        console.warn('[ShortlistedCVs] No applicants found — cannot shortlist. Skipping.');
-        console.warn('[ShortlistedCVs] Skipping — no test data available'); return;
-      }
+      expect(
+        await allApplicantsPage.hasApplicants(),
+        'Employer needs at least one applicant to shortlist (seeded by `npm run seed:full`).'
+      ).toBeTruthy();
       await allApplicantsPage.shortlistFirstApplicant();
       await shortlistedPage.navigate();
-      const hasNow = await shortlistedPage.hasShortlistedCandidates();
-      if (!hasNow) {
-        console.warn('[ShortlistedCVs] Still no shortlisted candidates. Skipping.');
-        console.warn('[ShortlistedCVs] Skipping — no test data available'); return;
-      }
+      hasShortlisted = await shortlistedPage.hasShortlistedCandidates();
     }
+    expect(
+      hasShortlisted,
+      'Employer should have a shortlisted candidate available for interview scheduling'
+    ).toBeTruthy();
     this.logMessage('[ShortlistedCVs] Employer has shortlisted candidates ready for interview scheduling.');
   }
 );
@@ -103,11 +96,10 @@ Given('the employer schedules an interview for a shortlisted candidate with a fu
       await shortlistedPage.navigate();
     }
 
-    const hasShortlisted = await shortlistedPage.hasShortlistedCandidates();
-    if (!hasShortlisted) {
-      console.warn('[ShortlistedCVs] No shortlisted candidates — cannot schedule interview. Skipping.');
-      console.warn('[ShortlistedCVs] Skipping — no test data available'); return;
-    }
+    expect(
+      await shortlistedPage.hasShortlistedCandidates(),
+      'Employer should have a shortlisted candidate to schedule an interview for'
+    ).toBeTruthy();
 
     // Click schedule interview
     await shortlistedPage.clickScheduleInterview();
@@ -120,16 +112,25 @@ Given('the employer schedules an interview for a shortlisted candidate with a fu
     const format = 'Online';
     const location = 'https://meet.example.com/interview-link';
 
-    await shortlistedPage.fillInterviewForm(dateStr, timeStr, format, location);
+    // The backend requires an attendee email to create the interview and notify
+    // the candidate, so the candidate account is added as the attendee.
+    await shortlistedPage.fillInterviewForm(
+      dateStr, timeStr, format, location, envConfig.candidateEmail
+    );
     await shortlistedPage.submitInterview();
+    const result = await shortlistedPage.getInterviewResultText();
 
     (this as any).scheduledInterviewDate = futureDate.toLocaleDateString('en-GB');
     (this as any).scheduledInterviewTime = timeStr;
     (this as any).scheduledInterviewLocation = location;
 
     this.logMessage(
-      `[ShortlistedCVs] Scheduled interview for ${dateStr} at ${timeStr} — link: ${location}`
+      `[ShortlistedCVs] Scheduled interview for ${dateStr} at ${timeStr} — link: ${location}. Result: ${result}`
     );
+    expect(
+      result.toLowerCase(),
+      'Scheduling the interview should be confirmed by the application'
+    ).toContain('success');
   }
 );
 
@@ -231,11 +232,11 @@ Then('the form should contain a time field',
   }
 );
 
-Then('the form should contain a format or type field',
+Then('the form should contain an attendee email field',
   async function (this: CustomWorld) {
     const shortlistedPage = getPage(this);
-    const visible = await shortlistedPage.isFormatFieldVisible();
-    expect(visible, 'Interview scheduling form should contain a format/type field').toBeTruthy();
+    const visible = await shortlistedPage.isAttendeeFieldVisible();
+    expect(visible, 'Interview scheduling form should contain an attendee email field').toBeTruthy();
   }
 );
 

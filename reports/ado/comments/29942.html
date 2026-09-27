@@ -1,0 +1,8 @@
+<b>Retest — 2026-08-19 — PASSING on web (mobile not covered)</b><br><br><b>Scope caveat — please read before closing:</b> this ticket was filed against the <b>mobile app</b> (the repro steps use mobile gestures: "user tap on…", "navigate to more menu"). The available automation stack (Playwright + Cucumber, and the Reqnroll mirror) is <b>web-only — there is no Appium/mobile harness in this repo</b>, so the mobile app itself was <b>not</b> retested. The verdict below covers the equivalent <b>web</b> journey on https://jobrator.com only. If the defect was mobile-specific, this result does not clear it — it needs a retest on the device.<br><br>
+<b>Web equivalent retested:</b> candidate profile edit + save on
+https://jobrator.com/dashboard/profile.<br><br>
+<b>Result:</b> TC_CP002 — Candidate can update personal information and see a success
+message — <b>PASSED</b>. A field was edited, saved, and the value persisted across a reload:<br>
+<pre>Phone updated to : 08049004952
+After reload     : 08049004952  (persisted)</pre>
+<b>Verdict:</b> Candidate profile editing works on web. Needs a device retest to close for mobile.

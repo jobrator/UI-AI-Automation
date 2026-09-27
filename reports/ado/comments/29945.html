@@ -1,0 +1,16 @@
+<b>Retest — 2026-08-19 — PASSING</b><br><br>
+This ticket has no repro steps recorded, so it was retested as
+"invalid candidate credentials must surface a visible error to the user" on
+https://jobrator.com/login.<br><br>
+<b>Result:</b> submitting a registered candidate email with an incorrect password
+renders a visible error immediately:<br>
+<pre>Element : .text-danger
+Text    : "Invalid credentials or profile"
+URL     : https://jobrator.com/login  (user correctly kept on the login page)</pre>
+<b>Supporting automated coverage (both passed in the same session):</b><br>
+TC003 — Login fails with an incorrect password (asserts an authentication error
+message is displayed) — PASSED<br>
+TC004 — Login fails with a non-existent email address — PASSED<br><br>
+<b>Verdict:</b> Could not reproduce on web — the invalid-credential message is shown.
+Please add repro steps if the original report concerned the <b>mobile</b> modal
+specifically, as no mobile harness is available to verify that path.

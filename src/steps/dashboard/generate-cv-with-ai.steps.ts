@@ -3,6 +3,7 @@ import { expect } from '@playwright/test';
 import { CustomWorld } from '../../support/world';
 import { AiCvGeneratorPage } from '../../pages/AiCvGeneratorPage';
 import { SubscriptionPage } from '../../pages/SubscriptionPage';
+import { SubscriptionHistoryPage } from '../../pages/SubscriptionHistoryPage';
 import { RegistrationPage } from '../../pages/RegistrationPage';
 import { LoginPage } from '../../pages/LoginPage';
 import { EnvConfig } from '../../config/env.config';
@@ -21,13 +22,25 @@ function getSubPage(world: CustomWorld): SubscriptionPage {
 //  GIVEN — Fresh candidate setup (subscription scenarios)
 // ═══════════════════════════════════════════════════════════════════════════
 
-Given('a new candidate is registered and logged in',
+/**
+ * Register a throwaway candidate for the "unsubscribed candidate" scenarios.
+ *
+ * These must NOT use the shared account — it holds an active Jobrator Plus plan,
+ * so the AI buttons work and the Subscription Required modal never appears.
+ */
+Given('an unsubscribed candidate is registered and logged in',
+  { timeout: 120000 },
   async function (this: CustomWorld) {
     const ts = Date.now();
     const email = `autotest+${ts}@mailinator.com`;
     const password = 'Test@1234!';
     this.freshCandidateEmail = email;
     this.freshCandidatePassword = password;
+
+    // /register redirects to /dashboard when a session already exists, so the
+    // registration form would never render. Clear cookies first — this step must
+    // work whether or not a login hook has already run.
+    await this.page.context().clearCookies();
 
     const reg = new RegistrationPage(this.page);
     await reg.navigate();
@@ -43,14 +56,33 @@ Given('a new candidate is registered and logged in',
   }
 );
 
-Given('the candidate subscribes to Jobrator Plus using the Paystack test success card',
+/**
+ * Log in as the shared candidate, which is kept on an active Jobrator Plus plan.
+ *
+ * The AI scenarios used to register a throwaway candidate and pay through the
+ * Paystack test checkout inside the test. That can never work in the normal
+ * headless run: checkout.paystack.com puts a Cloudflare "verify you are human"
+ * interstitial in front of the test-card list. Subscribing is therefore a
+ * one-off environment concern, handled by `npm run seed:subscription` (real
+ * Chrome, headed), and the test just asserts the plan is active.
+ */
+Given('the subscribed candidate is logged in',
+  { timeout: 120000 },
   async function (this: CustomWorld) {
-    const sub = getSubPage(this);
-    await sub.completeTestSubscription();
-    this.logMessage(`[AI CV] Subscribed to Jobrator Plus. URL: ${this.page.url()}`);
+    const lp = new LoginPage(this.page);
+    await lp.navigate();
+    await lp.login(envConfig.candidateEmail, envConfig.candidatePassword);
+    await this.page.waitForURL(/dashboard|jobs|home/i, { timeout: envConfig.navigationTimeout }).catch(() => {});
+
+    const history = new SubscriptionHistoryPage(this.page);
+    await history.navigate();
+    await this.page.waitForTimeout(2500);
+    const activePlan = await history.getActivePlanName();
+    this.logMessage(`[AI CV] Active plan for ${envConfig.candidateEmail}: "${activePlan}"`);
     expect(
-      sub.isOnSuccessPage(),
-      'Expected to land on the subscription success page after Paystack payment'
+      activePlan,
+      'The shared candidate account must hold an active subscription for the AI scenarios. ' +
+      'Run `npm run seed:subscription` (headed, real Chrome) to renew it.'
     ).toBeTruthy();
   }
 );

@@ -33,11 +33,14 @@ export class VninVerificationPage extends BasePage {
     '[data-testid="vnin-dob"], #dob, input[placeholder*="Date of Birth" i], ' +
     'input[placeholder*="DD/MM/YYYY" i]';
 
+  // The live field is <input name="trustedNumber"> ("Enter your Registered
+  // Number"). Target the input directly — never a <label>, which .clear()/.fill()
+  // reject as "not an <input>".
   private readonly trustedPhoneField =
-    'label:has-text("VNIN"), label:has-text("Registered Number"), ' +
-    'input[name="vnin"], input[name="nin"], input[name="vnin_number"], ' +
+    'input[name="trustedNumber"], input[placeholder*="Registered Number" i], ' +
+    'input[placeholder*="Registered" i], ' +
     'input[name="phone"], input[name="trusted_phone"], input[name="phone_number"], ' +
-    'input[type="tel"], input[placeholder*="phone" i], input[placeholder*="Phone" i], ' +
+    'input[type="tel"], input[placeholder*="phone" i], ' +
     '[data-testid="vnin-phone"], #phone, #trusted_phone';
 
   private readonly vninField =

@@ -16,12 +16,15 @@ export class CompanyProfilePage extends BasePage {
     'input[name="company_name"], input[name="name"], input[placeholder*="company name" i], ' +
     '[data-testid="company-name"], input[id*="company_name"], input[id*="companyName"]';
 
+  // The description is a react-draft-wysiwyg editor: the editable node is the
+  // inner [contenteditable] (.public-DraftEditor-content), NOT the .rdw-editor-main
+  // wrapper (a plain div) and never a <label> — both are rejected by fill/clear.
   private readonly description =
     'textarea[name="description"], textarea[name="company_description"], ' +
     '[data-testid="company-description"], textarea[placeholder*="description" i], ' +
     'textarea[id*="description"], ' +
-    '.rdw-editor-main, [contenteditable="true"].public-DraftEditor-content, ' +
-    'label:has-text("Summary"), label:has-text("Description"), label:has-text("About")';
+    '.rdw-editor-main [contenteditable="true"], ' +
+    '[contenteditable="true"].public-DraftEditor-content, [contenteditable="true"]';
 
   private readonly culture =
     'textarea[name="culture"], textarea[name="company_culture"], input[name="culture"], ' +
@@ -260,8 +263,14 @@ export class CompanyProfilePage extends BasePage {
 
   async getDescriptionValue(): Promise<string> {
     try {
-      const loc = this.page.locator(this.description).first();
-      return (await loc.inputValue()).trim();
+      const loc = this.page.locator(this.description).filter({ visible: true }).first();
+      // The description is a contenteditable rich-text editor, whose text is read
+      // via innerText — inputValue() only works for <input>/<textarea>.
+      const tag = await loc.evaluate((n) => n.tagName.toLowerCase()).catch(() => '');
+      if (tag === 'textarea' || tag === 'input') {
+        return (await loc.inputValue()).trim();
+      }
+      return (await loc.innerText()).trim();
     } catch {
       return '';
     }

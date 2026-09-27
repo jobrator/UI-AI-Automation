@@ -144,7 +144,24 @@ When('the candidate opens the Jobrator password reset email',
   { timeout: 180000 },
   async function (this: CustomWorld) {
     const mailinatorTab = s(this).mailinatorTab!;
-    await pr(this).waitForAndClickResetEmail(mailinatorTab);
+    // Delivery of the reset email is intermittent on this environment (bugs/BUG-001).
+    // That is a real user-facing account-recovery defect, so the step fails with a
+    // clear message rather than skipping — matching the decision recorded in
+    // bugs/BUG-001 ("left asserting real behaviour, no soft-pass").
+    let delivered = true;
+    try {
+      await Promise.race([
+        pr(this).waitForAndClickResetEmail(mailinatorTab),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('reset-email-timeout')), 150000)),
+      ]);
+    } catch {
+      delivered = false;
+    }
+    expect(
+      delivered,
+      'The password reset email should arrive in the Mailinator inbox. Delivery is ' +
+      'intermittent on this environment — see bugs/BUG-001.'
+    ).toBeTruthy();
   }
 );
 

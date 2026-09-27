@@ -2,6 +2,7 @@ import { Given, When, Then } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 import { CustomWorld } from '../../support/world';
 import { PostJobPage } from '../../pages/PostJobPage';
+import { ManageJobsPage } from '../../pages/ManageJobsPage';
 import { EnvConfig } from '../../config/env.config';
 
 const envConfig = EnvConfig.getInstance();
@@ -33,9 +34,9 @@ Given('the employer has published a job with the title {string}',
     }
 
     const loaded = await postJobPage.isLoaded();
+    expect(loaded, 'Post A Job form should load before publishing the precondition job').toBeTruthy();
     if (!loaded) {
-      console.warn('[PostJob] Post job form did not load — cannot publish job pre-condition.');
-      return pending();
+      return;
     }
 
     await postJobPage.fillRequiredFields({
@@ -162,20 +163,24 @@ When('the employer fills in all required job fields with valid data',
 );
 
 When('the employer fills in partial job details',
+  { timeout: 90000 },
   async function (this: CustomWorld) {
     const postJobPage = getPage(this);
     const draftTitle = `Draft Job ${Date.now()}`;
     (this as any).draftJobTitle = draftTitle;
 
-    // Fill only the title and description (partial data)
-    await this.page.locator(postJobPage.titleField).first().fill(draftTitle);
-    await this.page.waitForTimeout(500);
-    const descVisible = await postJobPage.isDescriptionFieldVisible();
-    if (descVisible) {
-      await this.page.locator(postJobPage.descriptionField).first().fill('Partial draft description.');
-    }
+    // "Publish Later" is the live form's draft action and it runs the SAME
+    // client-side validation as Publish — a title-only submission is rejected
+    // outright and no draft is ever created. So fill the required set here; what
+    // makes the record a draft is the Publish Later action, not partial data.
+    await postJobPage.fillRequiredFields({
+      title: draftTitle,
+      description: 'Draft job created by the automation suite to verify draft status.',
+      location: 'London, United Kingdom',
+      salary: '40000',
+    });
 
-    this.logMessage(`[PostJob] Filled partial job details with draft title: "${draftTitle}"`);
+    this.logMessage(`[PostJob] Filled job details for draft title: "${draftTitle}"`);
   }
 );
 
@@ -297,13 +302,21 @@ Then('the new job listing should appear on the public jobs page',
 );
 
 Then('the job should be saved with draft status',
+  { timeout: 60000 },
   async function (this: CustomWorld) {
-    const postJobPage = getPage(this);
-    const saved = await postJobPage.isDraftSuccessVisible();
+    const draftTitle: string = (this as any).draftJobTitle ?? '';
+    // The durable proof of draft status is the Manage Jobs row: a job created via
+    // "Publish Later" is stored with isDraft=true and its status column reads
+    // "Draft" (a published job reads "Published"). Assert on that rather than on
+    // a transient success toast.
+    const manageJobs = new ManageJobsPage(this.page);
+    await manageJobs.navigate();
+    const status = await manageJobs.getStatusForJob(draftTitle);
+    this.logMessage(`[PostJob] Manage Jobs status for "${draftTitle}": "${status}"`);
     expect(
-      saved,
-      'Job should be saved with draft status — expected success message or redirect after saving draft'
-    ).toBeTruthy();
+      status.toLowerCase(),
+      `Job "${draftTitle}" should be listed with Draft status in Manage Jobs`
+    ).toContain('draft');
   }
 );
 
@@ -339,28 +352,22 @@ Then('validation errors should appear on all required job form fields',
 
 Then('the option {string} should be available in the Employment Type dropdown',
   async function (this: CustomWorld, employmentType: string) {
-    const postJobPage = getPage(this);
-    const options = await postJobPage.getOptionsInDropdown(postJobPage.employmentTypeDropdown);
-    const found = options.some((opt) =>
-      opt.toLowerCase().includes(employmentType.toLowerCase())
-    );
+    const options = await getPage(this).getEmploymentTypeOptions();
+    const found = options.some((opt) => opt.toLowerCase().includes(employmentType.toLowerCase()));
     expect(
       found,
-      `Employment Type dropdown should contain option "${employmentType}". Found: ${options.join(', ')}`
+      `Employment Type should offer "${employmentType}". Available: [${options.join(', ')}]`
     ).toBeTruthy();
   }
 );
 
 Then('the option {string} should be available in the Work Mode dropdown',
   async function (this: CustomWorld, workMode: string) {
-    const postJobPage = getPage(this);
-    const options = await postJobPage.getOptionsInDropdown(postJobPage.workModeDropdown);
-    const found = options.some((opt) =>
-      opt.toLowerCase().includes(workMode.toLowerCase())
-    );
+    const options = await getPage(this).getWorkModeOptions();
+    const found = options.some((opt) => opt.toLowerCase().includes(workMode.toLowerCase()));
     expect(
       found,
-      `Work Mode dropdown should contain option "${workMode}". Found: ${options.join(', ')}`
+      `Work Mode should offer "${workMode}". Available: [${options.join(', ')}]`
     ).toBeTruthy();
   }
 );
@@ -381,10 +388,12 @@ Then('the newly published job listing should appear in the search results',
   async function (this: CustomWorld) {
     const jobTitle: string = (this as any).publishedJobTitle ?? 'Automation QA Engineer';
     const titleSel = `*:has-text("${jobTitle.substring(0, 30)}")`;
+    // A job published via the Publish button goes live on /jobs immediately (no
+    // admin moderation step): verified against the live site on 2026-07-26.
     const count = await this.page.locator(titleSel).count();
     expect(
       count,
-      `Job "${jobTitle}" should appear in search results on the public jobs page`
+      `Job "${jobTitle}" should appear in the public search results immediately after publishing`
     ).toBeGreaterThan(0);
   }
 );

@@ -381,15 +381,18 @@ export class DashboardPage extends BasePage {
       await this.page.waitForTimeout(500);
     }
 
+    // The presence of the Messages entry point is what this asserts. The stat
+    // counter card sometimes renders a digit prefix (e.g. "2Messages") once the
+    // account summary API responds, but that count depends on a backend call
+    // that can be slow or unavailable — so we must NOT require the digit. Treat
+    // the button as present if ANY messages link is visible. (Do not use
+    // `.first().isVisible()`: the first match in the DOM is an off-canvas/hidden
+    // duplicate, which would falsely report the button as missing.)
     const all = await this.page.locator(this.topRightMessagesButton).all();
     for (const loc of all) {
-      if (!await loc.isVisible()) continue;
-      const text = (await loc.textContent() ?? '').trim();
-      // The stat counter card has text like "2Messages" (digit prefix)
-      if (/^\d+\s*Messages?/i.test(text)) return true;
+      if (await loc.isVisible()) return true;
     }
-    // Fallback: any messages link visible on the page
-    return this.lib.isVisible(this.topRightMessagesButton);
+    return false;
   }
 
   async clickTopRightMessages(): Promise<void> {

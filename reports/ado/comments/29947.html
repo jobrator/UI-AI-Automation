@@ -1,0 +1,11 @@
+<b>Retest — 2026-08-19 — PASSING on web (mobile not covered)</b><br><br><b>Scope caveat — please read before closing:</b> this ticket was filed against the <b>mobile app</b> (the repro steps use mobile gestures: "user tap on…", "navigate to more menu"). The available automation stack (Playwright + Cucumber, and the Reqnroll mirror) is <b>web-only — there is no Appium/mobile harness in this repo</b>, so the mobile app itself was <b>not</b> retested. The verdict below covers the equivalent <b>web</b> journey on https://jobrator.com only. If the defect was mobile-specific, this result does not clear it — it needs a retest on the device.<br><br>
+<b>Web equivalent retested:</b> employer login rejection with invalid / malformed
+credentials on https://jobrator.com/login (Employer tab).<br><br>
+<b>Result — all passed:</b><br>
+TC_ELOG003 — Login fails with an incorrect password — <b>PASSED</b><br>
+TC_ELOG004 — Login fails with a non-existent employer email address — <b>PASSED</b><br>
+TC_ELOG008 — Login fails with malformed email addresses (Scenario Outline) — <b>PASSED</b><br><br>
+In each case the employer was correctly kept on the login screen with an
+authentication error displayed.<br><br>
+<b>Verdict:</b> Employer invalid-credential handling works on web. Needs a device retest
+to close for mobile.

@@ -18,14 +18,22 @@ export class EmployerLoginPage extends LoginPage {
 
   async navigate(): Promise<void> {
     await this.lib.navigateTo(this.url('/login'));
-    const employerTabVisible = await this.lib.isVisible(this.employerTab);
-    if (employerTabVisible) {
-      await this.lib.click(this.employerTab);
-      await this.page.waitForTimeout(500);
-    }
+    await this.selectAccountTypeTab();
     await this.lib.waitForElement(
       'input[name="email"], input[type="email"], [placeholder*="email" i]'
     );
+  }
+
+  /**
+   * Employer counterpart of the base Candidate tab selection — the inherited
+   * `login()` calls this, so it must pick Employer here or employer credentials
+   * are submitted against the candidate profile and come back 401.
+   */
+  protected async selectAccountTypeTab(): Promise<void> {
+    if (await this.lib.isVisible(this.employerTab)) {
+      await this.lib.click(this.employerTab);
+      await this.page.waitForTimeout(500);
+    }
   }
 
   async isEmployerDashboardVisible(): Promise<boolean> {

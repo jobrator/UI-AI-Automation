@@ -26,15 +26,12 @@ Given('the candidate has at least one submitted application',
   async function (this: CustomWorld) {
     const page = getPage(this);
     const hasApps = await page.hasApplications();
-    if (!hasApps) {
-      console.warn(
-        '[AppliedJobs] No submitted applications found for the test account. ' +
-        'TC_AJ003 requires at least one existing application — ' +
-        'ensure the candidate account has at least one job application submitted.'
-      );
-    }
-    // We do not skip the scenario — continue and let subsequent steps surface
-    // any missing data as informative failures.
+    expect(
+      hasApps,
+      'Candidate should have at least one submitted application. Applying requires an ' +
+      'active Jobrator Plus subscription and a CV attached in the apply modal — both are ' +
+      'set up by `npm run seed:full`.'
+    ).toBeTruthy();
   }
 );
 

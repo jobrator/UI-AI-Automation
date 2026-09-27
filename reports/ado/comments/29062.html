@@ -1,0 +1,21 @@
+<b>Retest — 2026-08-19 — STILL FAILING</b><br><br>
+<b>What was verified:</b> logged in as a candidate with 10 existing job applications,
+opened the notification screen (https://jobrator.com/dashboard/notifications) and
+captured the backing API response
+<code>GET /api/account/candidate-notifications/?page=1&amp;limit=10</code> (HTTP 200).
+The bell/unread endpoint <code>GET /api/account/candidate-unread-notifications</code>
+was also called (HTTP 200).<br><br>
+<b>Result — every notification record returned is either a job recommendation or a
+message; there are no time-based reminders at all:</b>
+<pre>10 records, newest 2026-07-27 18:35:51, all of type
+"Job Recommendation" except one "Message received from ...".</pre>
+Keyword scan over the raw records:<br>
+<code>"expir" = false</code>, <code>"reminder" = false</code>,
+<code>"24 hour" = false</code>, <code>"2 hour" = false</code>,
+<code>"skill test" = false</code>.<br><br>
+No 48h / 24h / 2h pre-expiration notification was found in the bell feed, and no
+skill-test notification exists at all. Email delivery could not be independently
+verified (no access to the test candidate's mailbox) — but the in-app feed, which the
+repro steps explicitly cover (steps 3–5: tap bell icon, view notifications), is empty
+of these reminders.<br><br>
+<b>Verdict:</b> Not fixed for the in-app/bell path documented in the repro steps.

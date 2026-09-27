@@ -1,0 +1,29 @@
+<b>Retest — 2026-08-19 — STILL FAILING</b><br><br>
+Retested against production <code>POST https://api.jobrator.com/api/login</code>.
+Note the request contract has changed since this bug was filed: a
+<code>loginMethod</code> field (enum <code>email|google</code>) is now required, and
+<code>profile</code> now accepts <code>Candidate|Company</code>. Both scenarios were
+re-run with the corrected payload.<br><br>
+
+<b>Scenario 1 — internal exception code still leaked: FAIL</b><br>
+Registered candidate email + wrong password:<br>
+<pre>HTTP 401
+{"message":"Invalid credentials or profile",
+ "exception":"E_INVALID_AUTH_PASSWORD: Password mis-match"}</pre>
+The <code>exception</code> field is still present and still reveals the internal
+error code. Partial improvement: <code>message</code> is now generic
+("Invalid credentials or profile").<br><br>
+
+<b>Scenario 2 — responses still distinguishable: FAIL</b><br>
+<pre>Registered email + wrong password  -> 401 {"message":"Invalid credentials or profile",
+                                            "exception":"E_INVALID_AUTH_PASSWORD: Password mis-match"}
+Unregistered email + any password   -> 401 {"message":"Invalid credentials or profile",
+                                            "exception":"User not found or account disabled"}</pre>
+Status codes match, but the bodies are <b>not</b> byte-identical. The
+<code>exception</code> value alone distinguishes "this account exists, wrong password"
+from "no such account" — the enumeration oracle is intact.<br><br>
+
+<b>Verdict:</b> Not fixed. Remove the <code>exception</code> field from
+authentication failure responses (or make it constant across all failure modes) so
+the two cases are indistinguishable.<br>
+<i>Compounds with #29637 (no brute-force protection), also retested and still failing.</i>

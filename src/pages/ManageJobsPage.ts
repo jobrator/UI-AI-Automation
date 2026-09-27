@@ -28,11 +28,15 @@ export class ManageJobsPage extends BasePage {
     '.job-status, .status-badge, [data-testid="job-status"], [class*="status"], ' +
     '.badge, td[class*="status"]';
 
+  // The live Manage Jobs list uses icon-only action buttons whose label is in
+  // data-text ("Edit Job" / "Delete Job" / "View Job") — has-text won't match.
   private readonly editButton =
+    'button[data-text*="Edit" i], a[data-text*="Edit" i], ' +
     'a:has-text("Edit"), button:has-text("Edit"), [data-testid="edit-job"], ' +
     'a[href*="edit"], .edit-btn, [class*="edit"] a, [class*="edit"] button';
 
   private readonly deleteButton =
+    'button[data-text*="Delete" i], a[data-text*="Delete" i], ' +
     'button:has-text("Delete"), a:has-text("Delete"), [data-testid="delete-job"], ' +
     '.delete-btn, [class*="delete"] button, [class*="delete"] a, ' +
     'button:has-text("Remove"), a:has-text("Remove")';
@@ -45,6 +49,10 @@ export class ManageJobsPage extends BasePage {
     'button:has-text("Deactivate"), a:has-text("Deactivate"), [data-testid="deactivate-job"], ' +
     '.deactivate-btn, button:has-text("Unpublish"), a:has-text("Unpublish"), ' +
     'button:has-text("Inactive"), a:has-text("Inactive")';
+
+  // The Manage Jobs list has no deactivate action; the "Job Status" control lives
+  // on the Edit Job form as a select whose options are 0 = Publish, 1 = Draft.
+  private readonly jobStatusSelect = 'select[name="isDraft"]';
 
   // Edit form locators
   private readonly editDescriptionField =
@@ -98,6 +106,16 @@ export class ManageJobsPage extends BasePage {
 
   async getFirstJobTitle(): Promise<string> {
     try {
+      // Prefer the job title heading/link only (e.g. <h4><a>Title</a></h4>) so we
+      // capture the unique title, not the whole row's title+company+location text.
+      const titleLink = this.page
+        .locator('.job-block h4 a, .job-block h4, table tbody tr h4 a, table tbody tr h4, .job-title a, .job-title')
+        .filter({ visible: true })
+        .first();
+      if (await titleLink.count().catch(() => 0)) {
+        const t = (await titleLink.textContent() ?? '').trim();
+        if (t) return t;
+      }
       const entries = await this.page.locator(this.jobEntry).all();
       for (const entry of entries) {
         const titleEl = entry.locator(this.jobTitle).first();
@@ -149,6 +167,63 @@ export class ManageJobsPage extends BasePage {
   async hasDraftJobs(): Promise<boolean> {
     const count = await this.getDraftJobsCount();
     return count > 0;
+  }
+
+  /**
+   * Read the status cell ("Published" / "Draft" / "Expired") of the row whose
+   * title matches. Returns '' when the job is not listed.
+   */
+  async getStatusForJob(title: string): Promise<string> {
+    if (!title) return '';
+    const row = this.page
+      .locator(`tr:has-text("${title}"), .job-block:has-text("${title}")`)
+      .filter({ visible: true })
+      .first();
+    if (!(await row.isVisible({ timeout: 8000 }).catch(() => false))) return '';
+    const text = ((await row.textContent().catch(() => '')) ?? '').replace(/\s+/g, ' ');
+    return (text.match(/\b(Draft|Published|Expired|Inactive)\b/) ?? [''])[0];
+  }
+
+  /**
+   * Deactivate a job through the only control the product offers for it: the
+   * "Job Status" select (`select[name="isDraft"]`) on the Edit Job form. The
+   * list itself exposes View / Edit / Delete only.
+   */
+  async deactivateJobViaEditForm(title: string): Promise<boolean> {
+    const row = this.page
+      .locator(`tr:has-text("${title}"), .job-block:has-text("${title}")`)
+      .filter({ visible: true })
+      .first();
+    const edit = (await row.isVisible({ timeout: 5000 }).catch(() => false))
+      ? row.locator(this.editButton).first()
+      : this.page.locator(this.editButton).first();
+    await edit.click();
+    await this.page.waitForTimeout(6000);
+
+    const statusSelect = this.page.locator(this.jobStatusSelect).first();
+    if (!(await statusSelect.isVisible({ timeout: 10000 }).catch(() => false))) return false;
+    await statusSelect.selectOption('1'); // 0 = Publish, 1 = Draft
+    await this.page.waitForTimeout(500);
+
+    await this.page.locator(this.saveEditButton).first().click().catch(() => {});
+    await this.page.waitForTimeout(5000);
+    const confirm = this.page.locator('.swal2-confirm').first();
+    if (await confirm.isVisible().catch(() => false)) {
+      await confirm.click();
+      await this.page.waitForTimeout(2500);
+    }
+    return true;
+  }
+
+  /** True when the product exposes any control for taking a job out of publication. */
+  async hasDeactivateControl(): Promise<boolean> {
+    if (await this.lib.isVisible(this.deactivateButton)) return true;
+    // The live control lives on the Edit Job form as a "Job Status" select.
+    const edit = this.page.locator(this.editButton).first();
+    if (!(await edit.isVisible({ timeout: 5000 }).catch(() => false))) return false;
+    await edit.click();
+    await this.page.waitForTimeout(6000);
+    return this.page.locator(this.jobStatusSelect).first().isVisible({ timeout: 8000 }).catch(() => false);
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -255,15 +330,27 @@ export class ManageJobsPage extends BasePage {
   }
 
   async confirmDelete(): Promise<void> {
-    // Wait for confirm dialog (SweetAlert2 or browser confirm)
-    const confirmLoc = this.page.locator(this.confirmDeleteButton).first();
+    // The live confirm is a SweetAlert2 dialog whose confirm button is
+    // "Yes, delete it!" (class .swal2-confirm) — target it explicitly so we never
+    // pick the deny/cancel button, then wait for the success dialog and dismiss it.
+    const confirmLoc = this.page
+      .locator('.swal2-confirm, button:has-text("Yes, delete it!")')
+      .filter({ visible: true })
+      .first();
     try {
       await confirmLoc.waitFor({ state: 'visible', timeout: 5000 });
       await confirmLoc.click();
-      await this.page.waitForTimeout(2000);
+      // Wait for the "Success" dialog, then dismiss it so the list refreshes.
+      await this.page.locator('.swal2-popup:has-text("Success"), .swal2-success')
+        .first().waitFor({ state: 'visible', timeout: 8000 }).catch(() => {});
+      await this.page.locator('.swal2-confirm').filter({ visible: true }).first()
+        .click().catch(() => {});
+      await this.page.waitForTimeout(1500);
     } catch {
-      // Browser dialog — handle via acceptDialog
+      // Fallback: a generic confirm control or a native browser dialog.
       this.page.once('dialog', async (dialog) => dialog.accept());
+      await this.page.locator(this.confirmDeleteButton).filter({ visible: true }).first()
+        .click().catch(() => {});
       await this.page.waitForTimeout(2000);
     }
   }
@@ -274,8 +361,10 @@ export class ManageJobsPage extends BasePage {
       return true;
     }
     await this.page.waitForTimeout(1000);
-    const sel = `${this.jobEntry}:has-text("${titleToCheck.substring(0, 20)}")`;
-    const count = await this.lib.getCount(sel);
+    // Match the FULL, exact title — many seeded jobs share a prefix (e.g.
+    // "Journey QA Job 17847…"), so a truncated/substring match would still find
+    // sibling jobs and wrongly report the deleted one as still present.
+    const count = await this.page.getByText(titleToCheck, { exact: true }).count().catch(() => 0);
     return count === 0;
   }
 

@@ -1,0 +1,7 @@
+<b>Retest — 2026-08-19 — PASSING on web (mobile not covered)</b><br><br><b>Scope caveat — please read before closing:</b> this ticket was filed against the <b>mobile app</b> (the repro steps use mobile gestures: "user tap on…", "navigate to more menu"). The available automation stack (Playwright + Cucumber, and the Reqnroll mirror) is <b>web-only — there is no Appium/mobile harness in this repo</b>, so the mobile app itself was <b>not</b> retested. The verdict below covers the equivalent <b>web</b> journey on https://jobrator.com only. If the defect was mobile-specific, this result does not clear it — it needs a retest on the device.<br><br>
+<b>Web equivalent retested:</b> candidate sign-in with valid credentials on
+https://jobrator.com/login.<br><br>
+<b>Result:</b> TC001 — Successful login with valid candidate credentials — <b>PASSED</b>.
+Sign-in completed and the candidate landed on the authenticated area
+(https://jobrator.com/jobs).<br><br>
+<b>Verdict:</b> Candidate sign-in works on web. Needs a device retest to close for mobile.

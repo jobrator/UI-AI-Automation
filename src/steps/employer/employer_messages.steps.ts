@@ -45,15 +45,20 @@ Given('the employer account has no message threads',
   async function (this: CustomWorld) {
     const messagesPage = getPage(this);
     await messagesPage.navigate();
-    const hasThreads = await messagesPage.hasThreads();
-    if (hasThreads) {
-      console.warn(
-        '[EmployerMessages] Employer account has existing message threads. ' +
-        'The empty state scenario cannot be accurately tested with existing threads. ' +
-        'Proceeding to check for empty state element regardless.'
-      );
-    }
-    this.logMessage(`[EmployerMessages] Message threads present: ${hasThreads}`);
+    const threadCount = await messagesPage.getThreadCount();
+    this.logMessage(`[EmployerMessages] Message threads present: ${threadCount}`);
+
+    // Fail here rather than on the empty-state assertion below. The shared
+    // employer account carries the thread that TC_EMSG001/002/004 depend on, so
+    // this scenario's precondition can never hold on it — letting it run anyway
+    // produces an "empty state missing" failure that wrongly reads as a product
+    // defect. TC_EMSG003 needs its own employer fixture with zero threads.
+    expect(
+      threadCount,
+      `TC_EMSG003 precondition not met: the employer account has ${threadCount} message ` +
+      'thread(s). This scenario needs a dedicated employer account with no threads — the ' +
+      'shared account must keep its thread for TC_EMSG001/TC_EMSG002/TC_EMSG004.'
+    ).toBe(0);
   }
 );
 
@@ -108,6 +113,12 @@ Then('each thread should display a timestamp',
 When('the employer opens a candidate conversation',
   async function (this: CustomWorld) {
     const messagesPage = getPage(this);
+    expect(
+      await messagesPage.hasThreads(),
+      'Employer should have at least one candidate conversation. Threads are seeded by ' +
+      '`npm run seed:full`, which opens one from the candidate side via the ' +
+      '"Private Message" control on the company page (/company/<id>).'
+    ).toBeTruthy();
     await messagesPage.openFirstThread();
     this.logMessage(`[EmployerMessages] Opened first candidate conversation → ${this.page.url()}`);
   }

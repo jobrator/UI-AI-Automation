@@ -104,15 +104,16 @@ export class PublicHomePage extends BasePage {
    * Tabs may be <button>, <a>, or <li> elements.
    */
   async clickHowItWorksTab(tab: string): Promise<void> {
+    // Target the actual Bootstrap nav-tab <button role="tab"> — NOT the <ul>/<li>
+    // container (a broad [class*="tab"] selector resolves .first() to the <ul>,
+    // which does not toggle the tab). Labels are Title-cased on the site
+    // (e.g. "Apply Jobs"); :has-text is case-insensitive so "APPLY JOBS" matches.
     const selector =
-      `[class*="how-it-work"] button:has-text("${tab}"), ` +
-      `[class*="how-it-work"] a:has-text("${tab}"), ` +
-      `[class*="how-it-work"] li:has-text("${tab}"), ` +
-      `[class*="howitwork"] button:has-text("${tab}"), ` +
-      `[class*="howitwork"] a:has-text("${tab}"), ` +
-      `[class*="tab"]:has-text("${tab}"), ` +
-      `button:has-text("${tab}"), li[class*="tab"]:has-text("${tab}")`;
+      `#myTab button.nav-link:has-text("${tab}"), ` +
+      `ul.nav-tabs button.nav-link:has-text("${tab}"), ` +
+      `[role="tab"]:has-text("${tab}")`;
     await this.lib.click(selector);
+    await this.page.waitForTimeout(400);
   }
 
   /**
@@ -120,13 +121,14 @@ export class PublicHomePage extends BasePage {
    * Looks for visible elements with text matching the tab label within panel/content containers.
    */
   async isHowItWorksContentVisible(tab: string): Promise<boolean> {
-    const selector =
-      `[class*="tab-content"]:has-text("${tab}"), ` +
-      `[class*="tab-pane"].active:has-text("${tab}"), ` +
-      `[class*="panel"]:has-text("${tab}"), ` +
-      `[class*="how-it-work"] [class*="content"]:has-text("${tab}"), ` +
-      `.active:has-text("${tab}"), [aria-selected="true"]:has-text("${tab}")`;
-    return this.lib.isVisible(selector);
+    // A tab component "displays its content panel" when the clicked tab becomes
+    // the active/selected tab. The Bootstrap nav-tabs mark this with
+    // aria-selected="true" and the .active class on the tab button.
+    const activeTab =
+      `#myTab button.nav-link.active:has-text("${tab}"), ` +
+      `ul.nav-tabs button.nav-link.active:has-text("${tab}"), ` +
+      `[role="tab"][aria-selected="true"]:has-text("${tab}")`;
+    return this.lib.isVisible(activeTab);
   }
 
   /**
@@ -141,8 +143,16 @@ export class PublicHomePage extends BasePage {
       `[role="contentinfo"] a:has-text("${text}"), ` +
       `footer a:has-text("${short}"), [class*="footer"] a:has-text("${short}"), ` +
       `[role="contentinfo"] a:has-text("${short}")`;
+    const startUrl = this.page.url();
     await this.lib.click(selector);
-    await this.page.waitForLoadState('domcontentloaded');
+    // These footer links trigger client-side navigation, so waitForLoadState
+    // often resolves against the still-current homepage document before the
+    // route changes. Wait for the URL to actually change away from the start
+    // page (bounded) so callers observe the destination, not the origin.
+    await this.page
+      .waitForFunction((start) => window.location.href !== start, startUrl, { timeout: 15000 })
+      .catch(() => { /* navigation may be same-URL or already done; fall through */ });
+    await this.page.waitForLoadState('domcontentloaded').catch(() => { /* best-effort */ });
   }
 
   /** Check whether a footer link with the given text is visible */

@@ -1,0 +1,255 @@
+{
+  "iteration": "JOBRATOR\\Sprint 54",
+  "rows": [
+    {
+      "id": 25616,
+      "type": "User Story",
+      "title": "Notification Settings - Mobile",
+      "state": "Testing",
+      "assignedTo": "adetunjiajayi25",
+      "priority": 2,
+      "severity": null,
+      "tags": null
+    },
+    {
+      "id": 25730,
+      "type": "User Story",
+      "title": "Skill Test Notification -Mobile",
+      "state": "Testing",
+      "assignedTo": "Moses Adesina",
+      "priority": 2,
+      "severity": null,
+      "tags": null
+    },
+    {
+      "id": 26042,
+      "type": "User Story",
+      "title": "Consolidated Mobile Automation of Tickets",
+      "state": "Testing",
+      "assignedTo": null,
+      "priority": 2,
+      "severity": null,
+      "tags": null
+    },
+    {
+      "id": 26044,
+      "type": "Task",
+      "title": "Upload/ View and Delete Cv automation",
+      "state": "Active",
+      "assignedTo": "adetunjiajayi25",
+      "priority": 2,
+      "severity": null,
+      "tags": null
+    },
+    {
+      "id": 26045,
+      "type": "Task",
+      "title": "Edit Profile Candidate /Mobile automation",
+      "state": "Active",
+      "assignedTo": "Moses Adesina",
+      "priority": 2,
+      "severity": null,
+      "tags": "Femi"
+    },
+    {
+      "id": 26048,
+      "type": "Task",
+      "title": "Company Logout  - Mobile Automation",
+      "state": "Active",
+      "assignedTo": "adeltosing",
+      "priority": 2,
+      "severity": null,
+      "tags": null
+    },
+    {
+      "id": 26050,
+      "type": "Task",
+      "title": "Job Post - Mobile Automation",
+      "state": "Active",
+      "assignedTo": "Nnenna",
+      "priority": 2,
+      "severity": null,
+      "tags": null
+    },
+    {
+      "id": 28140,
+      "type": "Bug",
+      "title": "CV is not Upload until is refreshed",
+      "state": "Active",
+      "assignedTo": "adetunjiajayi25",
+      "priority": 2,
+      "severity": "3 - Medium",
+      "tags": "Chris"
+    },
+    {
+      "id": 28185,
+      "type": "Task",
+      "title": "Refactoring of Automation Test for Windows and Mac",
+      "state": "Active",
+      "assignedTo": "tester",
+      "priority": 2,
+      "severity": null,
+      "tags": null
+    },
+    {
+      "id": 28906,
+      "type": "Task",
+      "title": "Manual Testing",
+      "state": "Active",
+      "assignedTo": "Moses Adesina",
+      "priority": 2,
+      "severity": null,
+      "tags": null
+    },
+    {
+      "id": 28941,
+      "type": "Bug",
+      "title": "No Skill test Email notification after the application is submitted.",
+      "state": "New",
+      "assignedTo": "Moses Adesina",
+      "priority": 2,
+      "severity": "3 - Medium",
+      "tags": null
+    },
+    {
+      "id": 29062,
+      "type": "Bug",
+      "title": "No Skill test bell or email notification for 48h, 24h, 2h before job expiration",
+      "state": "New",
+      "assignedTo": "Moses Adesina",
+      "priority": 2,
+      "severity": "3 - Medium",
+      "tags": null
+    },
+    {
+      "id": 29064,
+      "type": "Bug",
+      "title": "The candidate is still able to take the test after the job posting expired and after the test time period expires",
+      "state": "New",
+      "assignedTo": "Moses Adesina",
+      "priority": 2,
+      "severity": "3 - Medium",
+      "tags": null
+    },
+    {
+      "id": 29138,
+      "type": "Task",
+      "title": "Testcase Review",
+      "state": "Active",
+      "assignedTo": "Moses Adesina",
+      "priority": 2,
+      "severity": null,
+      "tags": null
+    },
+    {
+      "id": 29359,
+      "type": "User Story",
+      "title": "Regresion Test on Web and  Mobile",
+      "state": "New",
+      "assignedTo": null,
+      "priority": 2,
+      "severity": null,
+      "tags": null
+    },
+    {
+      "id": 29637,
+      "type": "Bug",
+      "title": "Brute force protection after multiple login failures not implemented (All Users Type on Web)",
+      "state": "New",
+      "assignedTo": null,
+      "priority": 2,
+      "severity": "3 - Medium",
+      "tags": "Tosin Adeleye"
+    },
+    {
+      "id": 29766,
+      "type": "Task",
+      "title": "Jobrator Web Smoke Testing(Automation)",
+      "state": "Active",
+      "assignedTo": "adeltosing",
+      "priority": 2,
+      "severity": null,
+      "tags": "Tosin Adeleye"
+    },
+    {
+      "id": 29941,
+      "type": "Bug",
+      "title": "candidate sign-in (Mobile)",
+      "state": "New",
+      "assignedTo": "adetunjiajayi25",
+      "priority": 2,
+      "severity": "3 - Medium",
+      "tags": null
+    },
+    {
+      "id": 29942,
+      "type": "Bug",
+      "title": "CandidateEditProfile",
+      "state": "New",
+      "assignedTo": "adetunjiajayi25",
+      "priority": 2,
+      "severity": "3 - Medium",
+      "tags": null
+    },
+    {
+      "id": 29943,
+      "type": "Bug",
+      "title": "CVUpload",
+      "state": "New",
+      "assignedTo": "adetunjiajayi25",
+      "priority": 2,
+      "severity": "3 - Medium",
+      "tags": null
+    },
+    {
+      "id": 29944,
+      "type": "Bug",
+      "title": "ChangePassword (×3)",
+      "state": "New",
+      "assignedTo": "adetunjiajayi25",
+      "priority": 2,
+      "severity": "3 - Medium",
+      "tags": null
+    },
+    {
+      "id": 29945,
+      "type": "Bug",
+      "title": "candidate invalid-credential modal",
+      "state": "New",
+      "assignedTo": "adetunjiajayi25",
+      "priority": 2,
+      "severity": "3 - Medium",
+      "tags": null
+    },
+    {
+      "id": 29946,
+      "type": "Bug",
+      "title": "VerifyEmployerCanEditProfile",
+      "state": "New",
+      "assignedTo": "adetunjiajayi25",
+      "priority": 2,
+      "severity": "3 - Medium",
+      "tags": null
+    },
+    {
+      "id": 29947,
+      "type": "Bug",
+      "title": "VerifyEmployerCannotLoginWithInvalidCredential",
+      "state": "New",
+      "assignedTo": "adetunjiajayi25",
+      "priority": 2,
+      "severity": "3 - Medium",
+      "tags": null
+    },
+    {
+      "id": 29981,
+      "type": "Bug",
+      "title": "Login API leaks internal exception code (E_INVALID_AUTH_PASSWORD) confirming password mismatch — enables credential/account enumeration",
+      "state": "New",
+      "assignedTo": null,
+      "priority": 2,
+      "severity": "3 - Medium",
+      "tags": "Tosin Adeleye"
+    }
+  ]
+}

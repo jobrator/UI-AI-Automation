@@ -18,6 +18,7 @@
 
 import { Given, When, Then } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
+import type { Locator } from 'playwright';
 import * as path from 'path';
 import { CustomWorld } from '../../support/world';
 import { EnvConfig } from '../../config/env.config';
@@ -772,7 +773,13 @@ async function adminApprovesJob(world: CustomWorld, title: string): Promise<void
 async function candidateAppliesToJob(world: CustomWorld, title: string): Promise<boolean> {
   await loginAsCandidate(world);
   const page = world.page;
-  const applyForJob = page.locator('button:has-text("Apply For Job")').first();
+  // The Apply control renders as an <a href="../subscription"> even for a
+  // subscribed account (the href is only the no-JS fallback — the click handler
+  // opens the apply modal), so both element types must be matched.
+  const applyForJob = page
+    .locator('a:has-text("Apply For Job"), button:has-text("Apply For Job")')
+    .filter({ visible: true })
+    .first();
 
   // Job-detail pages are Next.js RSC routes that intermittently fail to hydrate
   // ("Failed to fetch RSC payload"). Open the seeded job by clicking its card
@@ -804,28 +811,65 @@ async function candidateAppliesToJob(world: CustomWorld, title: string): Promise
   await applyForJob.click();
   await page.waitForTimeout(1500);
   const dialog = page.locator('.modal, [role="dialog"]').filter({ hasText: 'Apply for this job' }).first();
-  let cvOk = false;
-  const sel = dialog.locator('select').first();
-  if (await sel.isVisible({ timeout: 3000 }).catch(() => false)) {
-    for (const o of await sel.locator('option').all()) {
-      const v = await o.getAttribute('value');
-      if (v && v !== '' && !/select/i.test((await o.innerText()) || '')) { await sel.selectOption({ value: v }); cvOk = true; break; }
-    }
-  }
+  const cvOk = await selectCvInApplyModal(world, dialog);
   if (!cvOk) {
     const fi = dialog.locator('input[type="file"], input[name="attachments"]').first();
-    if (await fi.count() > 0) { await fi.setInputFiles(SEED_CV).catch(() => {}); await page.waitForTimeout(2000); }
+    if (await fi.count() > 0) { await fi.setInputFiles(SEED_CV).catch(() => {}); await page.waitForTimeout(2500); }
   }
   const applyJob = dialog.locator('button', { hasText: /^Apply Job$/ }).first();
   await applyJob.scrollIntoViewIfNeeded().catch(() => {});
   await applyJob.click({ timeout: 8000 }).catch(async () => { await applyJob.click({ force: true }).catch(() => {}); });
-  await page.waitForTimeout(3000);
+  await page.waitForTimeout(4000);
+  const swal = ((await page.textContent('.swal2-popup').catch(() => '')) ?? '').replace(/\s+/g, ' ').trim();
+  if (swal) world.logMessage(`[Journey/Bridge] Apply result: ${swal}`);
 
   await page.goto(siteUrl(world, '/dashboard/applied-jobs'), { waitUntil: 'domcontentloaded', timeout: envConfig.navigationTimeout });
-  await page.waitForTimeout(3000);
+  await page.waitForTimeout(3500);
   const applied = (await page.locator('table tbody tr').count().catch(() => 0)) > 0;
   world.logMessage(`[Journey/Bridge] Candidate application on Applied Jobs list: ${applied}`);
   return applied;
+}
+
+/**
+ * Pick a CV inside the "Apply for this job" modal.
+ *
+ * The CV picker is NOT a <select> — it is a custom dropdown rendered as a
+ * "Select a CV" trigger plus a list of the candidate's uploaded documents.
+ * Submitting without choosing one makes `POST /job-posts/<id>/apply` return 500
+ * (surfaced in the UI as the misleading "You can apply to a job Only Once!"),
+ * which is why every earlier apply attempt failed.
+ */
+async function selectCvInApplyModal(world: CustomWorld, dialog: Locator): Promise<boolean> {
+  const page = world.page;
+
+  // Legacy native-select form, in case the build changes back.
+  const nativeSelect = dialog.locator('select').first();
+  if (await nativeSelect.isVisible({ timeout: 1500 }).catch(() => false)) {
+    for (const option of await nativeSelect.locator('option').all()) {
+      const value = await option.getAttribute('value');
+      if (value && !/select/i.test((await option.innerText().catch(() => '')) || '')) {
+        await nativeSelect.selectOption({ value });
+        return true;
+      }
+    }
+  }
+
+  const trigger = dialog.locator('button:has-text("Select a CV"), [class*="select"]:has-text("Select a CV")')
+    .filter({ visible: true }).first();
+  if (!(await trigger.isVisible({ timeout: 4000 }).catch(() => false))) return false;
+  await trigger.click().catch(() => {});
+  await page.waitForTimeout(1200);
+
+  const option = page
+    .locator('li:visible, [role="option"]:visible, .dropdown-item:visible, [class*="option"]:visible')
+    .filter({ hasText: /CV|Resume|\.pdf|\.docx?/i })
+    .first();
+  if (!(await option.isVisible({ timeout: 4000 }).catch(() => false))) return false;
+  const label = ((await option.textContent().catch(() => '')) ?? '').trim();
+  await option.click().catch(() => {});
+  await page.waitForTimeout(900);
+  world.logMessage(`[Journey/Bridge] Attached CV "${label}" in the apply modal.`);
+  return true;
 }
 
 /**
@@ -1062,19 +1106,22 @@ When('the employer opens a conversation with the candidate',
   async function (this: CustomWorld) {
     const page = this.page;
 
-    // Click the first conversation thread or the candidate's name
-    const conversationItem = page.locator(
-      '[class*="conversation"], [class*="message-item"], [class*="thread"], ' +
-      '[class*="chat-item"], li[class*="message"], [class*="inbox-item"]'
-    ).first();
+    // A conversation in the live chat widget is an <li> inside ul.contacts — the
+    // generic [class*="conversation"]/[class*="thread"] selectors match nothing,
+    // so the thread was never opened and the composer never rendered.
+    const conversationItem = page
+      .locator('ul.contacts li, .contacts_body li, [class*="conversation"], [class*="chat-item"]')
+      .filter({ visible: true })
+      .first();
 
-    if (await conversationItem.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await conversationItem.click();
-      await page.waitForTimeout(1000);
-      this.logMessage('[Journey] Opened conversation thread with candidate.');
-    } else {
-      console.warn('[Journey] No conversation found on Messages page — candidate may not have applied yet.');
-    }
+    expect(
+      await conversationItem.isVisible({ timeout: 15000 }).catch(() => false),
+      'The employer should have a candidate conversation to open. Threads are seeded by ' +
+      '`npm run seed:full` (candidate → /company/<id> → "Private Message").'
+    ).toBeTruthy();
+    await conversationItem.click();
+    await page.waitForTimeout(2500);
+    this.logMessage('[Journey] Opened conversation thread with candidate.');
   }
 );
 
@@ -1084,18 +1131,31 @@ When('the employer sends the message {string}',
 
     const messageInput = page.locator(
       'textarea[name*="message"], textarea[placeholder*="message" i], ' +
+      'textarea[placeholder*="type" i], textarea[placeholder*="reply" i], textarea, ' +
       'input[name*="message"], input[placeholder*="message" i], ' +
-      '[contenteditable="true"], .message-input'
-    ).first();
-    await messageInput.waitFor({ state: 'visible', timeout: envConfig.defaultTimeout });
+      'input[placeholder*="type" i], input[type="text"][class*="chat"], ' +
+      '[contenteditable="true"], .message-input, [class*="chat"] input, [class*="chat"] textarea'
+    ).filter({ visible: true }).first();
+    // A compose box only exists once a conversation is open. Threads are seeded by
+    // `npm run seed:full` (candidate → company page → "Private Message"), so a
+    // missing composer is a real failure now, not an environmental gap.
+    expect(
+      await messageInput.isVisible({ timeout: 15000 }).catch(() => false),
+      'The employer conversation should expose a message composer ' +
+      '(textarea[name="message"], placeholder "Type a message...")'
+    ).toBeTruthy();
     await messageInput.fill(messageText);
 
     const sendBtn = page.locator(
       'button:has-text("Send"), button[type="submit"], [class*="send-btn"], ' +
-      'button[aria-label*="send" i]'
-    ).first();
-    await sendBtn.waitFor({ state: 'visible', timeout: envConfig.defaultTimeout });
-    await sendBtn.click();
+      'button[aria-label*="send" i], button:has(.la-paper-plane), button:has([class*="send"]), ' +
+      '[class*="chat"] button'
+    ).filter({ visible: true }).first();
+    if (await sendBtn.count().catch(() => 0)) {
+      await sendBtn.click().catch(() => messageInput.press('Enter'));
+    } else {
+      await messageInput.press('Enter');
+    }
     await page.waitForTimeout(1500);
 
     (this as any).employerMessage = messageText;
@@ -1144,14 +1204,18 @@ Then("the employer's message should be visible in the candidate's message thread
     const page = this.page;
     const employerMessage = (this as any).employerMessage as string | undefined;
 
-    // Open the conversation thread (first thread)
-    const conversationItem = page.locator(
-      '[class*="conversation"], [class*="message-item"], [class*="thread"], [class*="chat-item"], li'
-    ).first();
-    if (await conversationItem.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await conversationItem.click();
-      await page.waitForTimeout(1000);
-    }
+    // Open the conversation thread. Scope to ul.contacts — a bare `li` in the
+    // selector matches the first nav menu item instead of a conversation.
+    const conversationItem = page
+      .locator('ul.contacts li, .contacts_body li, [class*="conversation"], [class*="chat-item"]')
+      .filter({ visible: true })
+      .first();
+    expect(
+      await conversationItem.isVisible({ timeout: 15000 }).catch(() => false),
+      "The candidate should have a conversation thread to open"
+    ).toBeTruthy();
+    await conversationItem.click();
+    await page.waitForTimeout(2500);
 
     if (employerMessage) {
       const messageLocator = page.locator(
@@ -1224,14 +1288,14 @@ When("the employer refreshes the Messages page", async function (this: CustomWor
   await page.waitForTimeout(1000);
   this.logMessage(`[Journey] Employer refreshed Messages page. URL: ${page.url()}`);
 
-  // Re-open the same conversation
-  const conversationItem = page.locator(
-    '[class*="conversation"], [class*="message-item"], [class*="thread"], ' +
-    '[class*="chat-item"], li[class*="message"], [class*="inbox-item"]'
-  ).first();
-  if (await conversationItem.isVisible({ timeout: 5000 }).catch(() => false)) {
+  // Re-open the same conversation (ul.contacts li is the live thread element)
+  const conversationItem = page
+    .locator('ul.contacts li, .contacts_body li, [class*="conversation"], [class*="chat-item"]')
+    .filter({ visible: true })
+    .first();
+  if (await conversationItem.isVisible({ timeout: 15000 }).catch(() => false)) {
     await conversationItem.click();
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(2500);
   }
 });
 
@@ -1362,8 +1426,23 @@ Then('the application should display the {string} status',
       }
     }
 
-    await expect(statusLocator).toBeVisible({ timeout: envConfig.expectTimeout });
-    this.logMessage(`[Journey] Status "${expectedStatus}" is displayed on the page.`);
+    // The admin status change may take a moment to propagate to the candidate/
+    // employer view — poll with reloads before asserting (eventual consistency).
+    for (let attempt = 0; attempt < 4; attempt++) {
+      if (await statusLocator.isVisible({ timeout: 2000 }).catch(() => false)) {
+        this.logMessage(`[Journey] Status "${expectedStatus}" is displayed on the page.`);
+        return;
+      }
+      await page.reload({ waitUntil: 'domcontentloaded', timeout: envConfig.navigationTimeout }).catch(() => {});
+      await page.waitForTimeout(2500);
+    }
+    // A genuinely submitted application now exists (seeded), so the admin status
+    // change must propagate to the candidate/employer view.
+    expect(
+      await statusLocator.isVisible({ timeout: 2000 }).catch(() => false),
+      `Status "${expectedStatus}" set in the admin console should also appear in the ` +
+      'candidate/employer application view'
+    ).toBeTruthy();
   }
 );
 
@@ -1470,7 +1549,12 @@ When("the candidate opens the searched job's detail page",
     // Same RSC-hydration guard as candidateAppliesToJob: the detail page sometimes
     // fails to render its action button on client-side nav, so retry with a hard
     // reload before giving up.
-    const actionBtn = page.locator('button:has-text("Apply For Job"), button:has-text("Applied")').first();
+    // The apply control renders as an <a class="theme-btn"> (with href) OR a
+    // <button>, labelled "Apply For Job" / "Applied" — match both element types.
+    const actionBtn = page.locator(
+      'button:has-text("Apply For Job"), a:has-text("Apply For Job"), ' +
+      'button:has-text("Applied"), a:has-text("Applied")'
+    ).filter({ visible: true }).first();
     let opened = false;
     for (let attempt = 0; attempt < 5 && !opened; attempt++) {
       let link = title
@@ -1519,12 +1603,23 @@ Then('the Apply For Job button should show Applied', async function (this: Custo
   const appliedIndicator = page.locator(
     'button:has-text("Applied"), a:has-text("Applied"), :text("Already Applied")'
   ).first();
-  await expect(appliedIndicator).toBeVisible({ timeout: envConfig.expectTimeout });
-
-  const applyStillActionable = await page.locator('button', { hasText: /^Apply For Job$/ }).first()
-    .isVisible({ timeout: 2000 }).catch(() => false);
-  if (applyStillActionable) {
-    console.warn('[Journey/TC_J005] An "Apply For Job" button is still visible alongside the Applied state.');
+  if (await appliedIndicator.isVisible({ timeout: envConfig.expectTimeout }).catch(() => false)) {
+    this.logMessage('[Journey/TC_J005] Apply For Job button shows Applied for the already-applied candidate.');
+    return;
   }
-  this.logMessage('[Journey/TC_J005] Apply For Job button shows Applied for the already-applied candidate.');
+  // The candidate HAS applied to this job (verified via the Applied Jobs list and
+  // POST /job-posts/<id>/apply returning 200), so the control must show "Applied".
+  // If it still reads "Apply For Job", check first whether the page actually
+  // hydrated — a job detail opened by hard navigation can render an empty RSC
+  // shell, which is a test-environment artefact rather than a product defect.
+  const applyHref = await page.locator('a:has-text("Apply For Job")').first()
+    .getAttribute('href').catch(() => null);
+  const controls = await page.locator('a, button').evaluateAll((els) =>
+    els.map((e) => (e.textContent || '').trim()).filter(Boolean).length);
+  expect(
+    false,
+    `Apply control still shows "Apply For Job" (href="${applyHref}") for a candidate who ` +
+    `has already applied. Page rendered ${controls} interactive control(s) — if that is 0 the ` +
+    'job detail failed to hydrate and needs a reload/client-side nav retry.'
+  ).toBeTruthy();
 });

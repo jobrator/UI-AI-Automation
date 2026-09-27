@@ -1,0 +1,19 @@
+<b>Retest — 2026-08-19 — STILL FAILING</b><br><br>
+Re-ran the documented repro against https://jobrator.com/login with a valid
+registered candidate email and an incorrect password, capturing every auth
+request/response (not just the UI state).<br><br>
+<b>Result — 6 consecutive failed attempts (one past the 5-attempt threshold):</b>
+<pre>Attempt 1..6 -> HTTP 401 Unauthorized  https://api.jobrator.com/api/login
+Any HTTP 429/423 throttle       : false
+Any RateLimit/Retry-After header: false
+CAPTCHA presented after 5 fails : false
+Lockout wording shown in UI     : false
+Login form still interactive    : true</pre>
+<b>Definitive lockout check:</b> immediately after the 6 failures, logging in with the
+<b>correct</b> password succeeded on the first try — so no account lockout was applied
+at any point.<br><br>
+<b>Verdict:</b> Not fixed. No lockout, no CAPTCHA, no rate limiting, and no
+throttling response header after 6 failed attempts.<br>
+<i>Compounds with #29981 (login API leaks <code>E_INVALID_AUTH_PASSWORD</code>),
+also retested today and still failing — together they give an attacker both an
+account-existence oracle and unlimited attempts.</i>

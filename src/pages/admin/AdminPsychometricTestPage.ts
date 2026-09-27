@@ -51,13 +51,22 @@ export class AdminPsychometricTestPage extends BasePage {
   }
 
   /**
-   * The exam list is fetched asynchronously and the page renders a
-   * "Loading exams..." placeholder until the request resolves. Wait for that
-   * placeholder to clear (bounded) before querying cards, otherwise counts are
-   * captured against a still-loading page. If the backend is unavailable the
-   * placeholder never clears — we time out and let callers soft-handle it.
+   * The page mounts a full-screen loading spinner while the SPA hydrates and
+   * the exam list is fetched. The spinner is a generic element (no "Loading
+   * exams" text), so waiting only on that text resolves immediately and leaves
+   * assertions racing an empty page. First wait for the page shell to render
+   * (the "Psychometric Exams" heading or the Create button — present even when
+   * zero exams exist), then clear any textual placeholder. If the backend is
+   * unavailable the shell never renders — we time out and let callers
+   * soft-handle it.
    */
   async waitForExamsLoaded(timeoutMs = 15000): Promise<void> {
+    await this.page
+      .waitForSelector(
+        'h1:has-text("Psychometric"), h3:has-text("Psychometric"), button:has-text("Create"), a:has-text("Create")',
+        { state: 'visible', timeout: timeoutMs }
+      )
+      .catch(() => {});
     await this.page
       .getByText('Loading exams', { exact: false })
       .waitFor({ state: 'hidden', timeout: timeoutMs })

@@ -26,7 +26,7 @@ module.exports = {
     ...common,
     parallel: 1,
     worldParameters: { browser: 'chromium' },
-    tags: 'not @skip'
+    tags: 'not @skip and not @mobile'
   },
 
   // ── Run on Chromium (parallel) ──────────────────────────────────────────
@@ -34,14 +34,14 @@ module.exports = {
     ...common,
     parallel: 2,
     worldParameters: { browser: 'chromium' },
-    tags: 'not @skip-chrome and not @skip'
+    tags: 'not @skip-chrome and not @skip and not @mobile'
   },
 
   // ── Run on Firefox (parallel) ───────────────────────────────────────────
   firefox: {
     ...common,
     worldParameters: { browser: 'firefox' },
-    tags: 'not @skip-firefox and not @skip'
+    tags: 'not @skip-firefox and not @skip and not @mobile'
   },
 
   // ── Single-browser sequential run (debugging) ──────────────────────────
@@ -49,7 +49,7 @@ module.exports = {
     ...common,
     parallel: 1,
     worldParameters: { browser: 'chromium' },
-    tags: 'not @skip'
+    tags: 'not @skip and not @mobile'
   },
 
   // ── Smoke tests only (fast feedback) ──────────────────────────────────
@@ -57,7 +57,7 @@ module.exports = {
     ...common,
     parallel: 2,
     worldParameters: { browser: 'chromium' },
-    tags: '@smoke and not @skip'
+    tags: '@smoke and not @skip and not @mobile'
   },
 
   // ── Security tests only ────────────────────────────────────────────────
@@ -65,7 +65,30 @@ module.exports = {
     ...common,
     parallel: 2,
     worldParameters: { browser: 'chromium' },
-    tags: '@security and not @skip'
+    tags: '@security and not @skip and not @mobile'
+  },
+
+  // ── Mobile (Appium) ───────────────────────────────────────────────────
+  // Separate support tree: the mobile suite has its own World (Appium session)
+  // and hooks, so it must NOT load the Playwright world/steps.
+  mobile: {
+    requireModule: ['ts-node/register'],
+    require: [
+      'src/mobile/support/mobile.world.ts',
+      'src/mobile/hooks/mobile.hooks.ts',
+      'src/mobile/steps/**/*.ts'
+    ],
+    paths: ['features/mobile/**/*.feature'],
+    format: [
+      'progress-bar',
+      'json:reports/mobile/cucumber-report.json',
+      'html:reports/mobile/cucumber-report.html',
+      'rerun:reports/mobile/@rerun.txt'
+    ],
+    formatOptions: { snippetInterface: 'async-await' },
+    // Appium serves one session per device — parallelism needs one device each.
+    parallel: parseInt(process.env.MOBILE_PARALLEL || '1', 10),
+    tags: process.env.MOBILE_TAGS || 'not @skip'
   },
 
   // ── Re-run previously failed tests ────────────────────────────────────

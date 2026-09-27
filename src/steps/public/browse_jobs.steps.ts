@@ -87,11 +87,32 @@ Given('the candidate opens a job detail page that they have not yet applied to',
 
 Given('the candidate is logged in and has already applied to a job',
   async function (this: CustomWorld) {
-    // The @requires-candidate-login hook handles login for this scenario.
-    // Store the current URL as the target "already applied" job.
-    // Navigate to jobs — the candidate has previously applied via existing test data.
-    await getJobsPage(this).navigate();
-    this.logMessage('[BrowseJobs] Candidate is assumed to have an existing application based on test data');
+    // The @requires-candidate-login hook handles login. This scenario needs a
+    // job the candidate has *actually* applied to. Read it from the Applied Jobs
+    // page and store its detail URL for the following step. If the account has no
+    // applications (applying is subscription-gated on the live site), there is no
+    // "Applied" state to assert — skip rather than fail (environmental data gap).
+    const { AppliedJobsPage } = await import('../../pages/AppliedJobsPage');
+    const appliedPage = new AppliedJobsPage(this.page);
+    await appliedPage.navigate();
+    await this.page.waitForTimeout(1500);
+    const count = await appliedPage.getApplicationCount().catch(() => 0);
+    expect(
+      count,
+      'Candidate should have at least one applied job so the "Applied" state can be ' +
+      'verified on the job detail page (seeded by `npm run seed:full`).'
+    ).toBeGreaterThan(0);
+    // Scope to the table rows — an unscoped a[href*="/jobs/"] resolves the header
+    // "Find Jobs" nav link, not the applied job.
+    const link = this.page
+      .locator('table tbody tr a[href*="/jobs/"], table tbody tr a[href*="/job/"], .job-title a')
+      .filter({ visible: true })
+      .first();
+    const href = await link.getAttribute('href').catch(() => null);
+    (this as any).appliedJobUrl = href
+      ? new URL(href, this.page.url()).toString()
+      : null;
+    this.logMessage(`[BrowseJobs] Candidate has ${count} application(s); target job: ${(this as any).appliedJobUrl}`);
   }
 );
 
@@ -157,11 +178,45 @@ When('the candidate clicks the Apply button',
 );
 
 When('the candidate navigates to that job detail page',
+  { timeout: 120000 },
   async function (this: CustomWorld) {
-    // Click the first job in the listing — assumed to already be applied from test data
-    const jobsPage = getJobsPage(this);
-    await jobsPage.clickFirstJobCard();
-    await this.page.waitForLoadState('domcontentloaded');
+    // Prefer the specific job the candidate applied to (captured in the Given).
+    const appliedUrl: string | null = (this as any).appliedJobUrl ?? null;
+    // Job detail is a Next.js RSC route: a hard goto frequently lands on an
+    // unhydrated shell with no apply control at all. Wait for the control and
+    // reload once before falling back to a client-side click from /jobs.
+    const applyControl = this.page
+      .locator('a:has-text("Apply"), button:has-text("Apply"), button:has-text("Applied"), :text("Already Applied")')
+      .filter({ visible: true })
+      .first();
+    const rendered = async () => applyControl.isVisible({ timeout: 8000 }).catch(() => false);
+
+    if (appliedUrl) {
+      await this.page.goto(appliedUrl, { waitUntil: 'domcontentloaded' });
+      await this.page.waitForTimeout(2500);
+      if (!(await rendered())) {
+        this.logMessage('[BrowseJobs] Job detail did not hydrate — reloading.');
+        await this.page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {});
+        await this.page.waitForTimeout(3000);
+      }
+    }
+
+    if (!(await rendered())) {
+      // Client-side navigation from the listing hydrates reliably.
+      const jobId = (appliedUrl ?? '').match(/\/jobs\/(\d+)/)?.[1];
+      await this.page.goto(`${envConfig.jobratorSite}jobs`, { waitUntil: 'domcontentloaded' });
+      await this.page.waitForTimeout(3000);
+      const card = jobId
+        ? this.page.locator(`.job-block a[href="/jobs/${jobId}"]`).first()
+        : this.page.locator('.job-block h4 a').first();
+      if (await card.isVisible({ timeout: 5000 }).catch(() => false)) {
+        await card.click();
+      } else {
+        await getJobsPage(this).clickFirstJobCard();
+      }
+      await this.page.waitForTimeout(3500);
+    }
+
     this.logMessage(`[BrowseJobs] Navigated to job detail: ${this.page.url()}`);
   }
 );
@@ -275,8 +330,14 @@ Then('only job listings with the work mode {string} should be displayed',
 
 Then('all filter values should be reset',
   async function (this: CustomWorld) {
-    await this.page.waitForTimeout(500);
-    const keywordValue = await getJobsPage(this).getKeywordInputValue();
+    // Clear All clears the field asynchronously — poll for the empty value rather
+    // than reading once (avoids a flake under parallel load).
+    let keywordValue = '';
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await this.page.waitForTimeout(500);
+      keywordValue = await getJobsPage(this).getKeywordInputValue().catch(() => '');
+      if (keywordValue === '') break;
+    }
     this.logMessage(`[BrowseJobs] Keyword input value after Clear All: "${keywordValue}"`);
     expect(
       keywordValue,
