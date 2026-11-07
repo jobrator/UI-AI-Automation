@@ -207,20 +207,6 @@ Then('the user should remain on the employer registration page',
 
 // ── Field visibility ──────────────────────────────────────────────────────────
 
-Then('the employer first name input field should be visible', async function (this: CustomWorld) {
-  expect(
-    await reg(this).isFirstNameInputVisible(),
-    'Employer first name input is not visible'
-  ).toBeTruthy();
-});
-
-Then('the employer last name input field should be visible', async function (this: CustomWorld) {
-  expect(
-    await reg(this).isLastNameInputVisible(),
-    'Employer last name input is not visible'
-  ).toBeTruthy();
-});
-
 Then('the employer email input field should be visible', async function (this: CustomWorld) {
   expect(
     await reg(this).isEmailInputVisible(),

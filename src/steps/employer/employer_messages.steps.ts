@@ -43,22 +43,27 @@ Given('the employer has at least one message thread with a candidate',
 
 Given('the employer account has no message threads',
   async function (this: CustomWorld) {
-    const messagesPage = getPage(this);
-    await messagesPage.navigate();
-    const threadCount = await messagesPage.getThreadCount();
-    this.logMessage(`[EmployerMessages] Message threads present: ${threadCount}`);
-
-    // Fail here rather than on the empty-state assertion below. The shared
-    // employer account carries the thread that TC_EMSG001/002/004 depend on, so
-    // this scenario's precondition can never hold on it — letting it run anyway
-    // produces an "empty state missing" failure that wrongly reads as a product
-    // defect. TC_EMSG003 needs its own employer fixture with zero threads.
-    expect(
-      threadCount,
-      `TC_EMSG003 precondition not met: the employer account has ${threadCount} message ` +
-      'thread(s). This scenario needs a dedicated employer account with no threads — the ' +
-      'shared account must keep its thread for TC_EMSG001/TC_EMSG002/TC_EMSG004.'
-    ).toBe(0);
+    // A real employer with zero threads cannot be provisioned. The shared employer
+    // must keep its threads for TC_EMSG001/002/004, a new company stays "pending
+    // approval" (it cannot sign in), and the admin console has no approval control.
+    // So answer the thread-list request (GET /api/account/conversations, verified
+    // 2026-11-05) with an empty page. That exercises exactly the behaviour under test:
+    // what the Messages page renders when the API reports no threads. Only this
+    // scenario's page is affected.
+    await this.page.route(/\/api\/account\/conversations(\?.*)?$/, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          meta: {
+            total: 0, perPage: 10, currentPage: 1, lastPage: 1, firstPage: 1,
+            firstPageUrl: '/?page=1', lastPageUrl: '/?page=1', nextPageUrl: null, previousPageUrl: null
+          },
+          data: []
+        })
+      })
+    );
+    this.logMessage('[EmployerMessages] Thread list stubbed to an empty page for this scenario.');
   }
 );
 
@@ -194,12 +199,16 @@ Then('the message should be visible in the conversation thread',
 
 Then('an appropriate empty state message should be displayed on the messages page',
   async function (this: CustomWorld) {
-    const messagesPage = getPage(this);
-    const emptyStateVisible = await messagesPage.isEmptyStateVisible();
-    expect(
-      emptyStateVisible,
-      'An empty state message should be displayed when the employer has no message threads'
-    ).toBeTruthy();
+    // With no threads the page renders no thread rows, and its chat panel invites
+    // the employer to start one ("Start a chat / Select a candidate to start a
+    // conversation", verified 2026-11-05). There is no dedicated "no messages" text.
+    // The left panel's "You have reached end of your chat" is a list footer that also
+    // shows when threads exist, so it proves nothing on its own.
+    await expect(this.page.locator('ul.contacts li'), 'thread rows rendered for an empty thread list').toHaveCount(0);
+    await expect(
+      this.page.getByText(/Start a chat|no (messages|conversations)/i).first(),
+      'the empty Messages page should guide the employer to start a conversation'
+    ).toBeVisible({ timeout: 15_000 });
   }
 );
 

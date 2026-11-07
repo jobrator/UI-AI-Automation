@@ -82,17 +82,46 @@ async function tryClearCloudflare(page: Page): Promise<void> {
 
   console.log(`\n[1] Logging in as ${email}`);
   const lp = new LoginPage(page);
-  await lp.navigate();
-  await lp.login(email, password);
-  await page.waitForURL(/dashboard|jobs|home/i, { timeout: 60000 }).catch(() => {});
-  console.log(`    → ${page.url()}`);
+  // Retry once: in headed real Chrome the form can be filled before the page has
+  // hydrated, and the submit then goes nowhere. Never continue logged out. Every
+  // later step (the "already subscribed?" check included) would silently report
+  // on a guest session.
+  let signedIn = false;
+  for (let attempt = 1; attempt <= 2 && !signedIn; attempt++) {
+    await lp.navigate();
+    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+    await lp.login(email, password);
+    signedIn = await page
+      .waitForURL(/dashboard|jobs|home/i, { timeout: 45000 })
+      .then(() => true)
+      .catch(() => false);
+    console.log(`    attempt ${attempt} → ${page.url()}`);
+  }
+  if (!signedIn) {
+    await shot(page, '00-login-failed');
+    console.log('    Could not sign in as the candidate. Aborting before touching the subscription.');
+    await ctx.close();
+    process.exit(1);
+  }
 
   console.log('[2] Checking current subscription status');
+  // Read the API's own answer, which the history page fetches. The old check, "Active
+  // plan" followed by "Jobrator" within 120 characters of page text, also matched
+  // an EXPIRED order in the history table, so a lapsed plan was reported as active
+  // and never renewed.
+  const statusResponse = page
+    .waitForResponse((r) => /\/api\/account\/subscriptions\/status/.test(r.url()), { timeout: 20000 })
+    .catch(() => null);
   await page.goto(`${site}/dashboard/subscription-history`, { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(2500);
-  const before = ((await page.textContent('body')) ?? '').replace(/\s+/g, ' ');
-  const activeBefore = /Active plan[\s\S]{0,120}?(Jobrator|Plus|Premium|Basic)/i.test(before);
-  console.log(`    already subscribed: ${activeBefore}`);
+  const status = await statusResponse;
+  const statusBody = status ? await status.json().catch(() => null) : null;
+  if (!statusBody || typeof statusBody.has_active_subscription !== 'boolean') {
+    console.log('    Could not read /account/subscriptions/status. Aborting rather than guessing.');
+    await ctx.close();
+    process.exit(1);
+  }
+  const activeBefore: boolean = statusBody.has_active_subscription;
+  console.log(`    already subscribed: ${activeBefore} (expiry ${statusBody.expiry_date ?? 'n/a'})`);
   if (activeBefore) {
     console.log('    Nothing to do — account already has an active plan.');
     await shot(page, 'already-subscribed');
@@ -177,11 +206,19 @@ async function tryClearCloudflare(page: Page): Promise<void> {
   await shot(page, '05-post-payment');
 
   console.log('[10] Verifying the plan is now active');
+  const afterResponse = page
+    .waitForResponse((r) => /\/api\/account\/subscriptions\/status/.test(r.url()), { timeout: 20000 })
+    .catch(() => null);
   await page.goto(`${site}/dashboard/subscription-history`, { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(3000);
-  const after = ((await page.textContent('body')) ?? '').replace(/\s+/g, ' ');
-  console.log('    subscription-history:', after.slice(after.indexOf('Active plan'), after.indexOf('Active plan') + 400));
+  const afterBody = await (await afterResponse)?.json().catch(() => null);
+  await page.waitForTimeout(2000);
   await shot(page, '06-subscription-history');
+  if (afterBody?.has_active_subscription !== true) {
+    console.log(`    FAILED: the API still reports no active plan (${JSON.stringify(afterBody)}).`);
+    await ctx.close();
+    process.exit(1);
+  }
+  console.log(`    active until ${afterBody.expiry_date}`);
 
   console.log('[11] Re-checking the Apply control on a job detail page');
   await page.goto(`${site}/jobs`, { waitUntil: 'domcontentloaded' });

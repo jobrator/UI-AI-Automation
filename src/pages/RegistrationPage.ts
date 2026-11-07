@@ -59,6 +59,10 @@ export class RegistrationPage extends BasePage {
     await this.lib.navigateTo(this.url('/login'));
     await this.page.locator(this.registerTrigger).first().click();
     await this.page.locator(this.firstNameInput).first().waitFor({ state: 'visible', timeout: 15000 });
+    // Let the form hydrate before anything is typed. Filled during hydration, React
+    // resets the inputs and the terms box, and Register stays disabled. That was the
+    // TC_EREG003 / TC068 / TC069 flake under parallel load.
+    await this.page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
   }
 
   async isLoaded(): Promise<boolean> {
@@ -89,21 +93,61 @@ export class RegistrationPage extends BasePage {
     await this.lib.clearAndFill(this.confirmPasswordInput, password);
   }
 
+  /**
+   * Ensures the terms box is ticked. Clicking the label TOGGLES it, so a click that
+   * lands before the form hydrates, or a second click, left it unticked and the
+   * Register button disabled (TC_EREG003 / TC068 / TC069 under parallel load).
+   * Click only until the hidden input reports checked.
+   */
   async checkTerms(): Promise<void> {
-    await this.page.locator(this.termsCheckboxLabel).first().click();
+    const box = this.page.locator('input#checkbox-ready, input[name="checkbox-ready"]').first();
+    for (let attempt = 0; attempt < 4; attempt++) {
+      if (await box.isChecked({ timeout: 2000 }).catch(() => false)) return;
+      await this.page.locator(this.termsCheckboxLabel).first().click();
+      await this.page.waitForTimeout(400);
+    }
   }
 
   async clickSubmit(): Promise<void> {
-    await this.lib.click(this.submitButton);
+    const button = this.page.locator(this.submitButton).filter({ visible: true }).first();
+    // The button enables only once every field is valid and the terms box is ticked.
+    // Give a slow-hydrating form a moment, re-assert the terms box once, and if it
+    // still won't enable, click anyway so negative scenarios see the form's own
+    // validation, rather than waiting out a 30s timeout on a disabled button.
+    if (!(await button.isEnabled().catch(() => false))) {
+      await this.page.waitForTimeout(1500);
+      if (!(await button.isEnabled().catch(() => false))) await this.checkTerms();
+    }
+    if (await button.isEnabled().catch(() => false)) {
+      await this.lib.click(this.submitButton);
+    } else {
+      await button.click({ force: true, timeout: 5000 }).catch(() => {});
+    }
   }
 
   async fillAllFields(firstName: string, lastName: string, email: string, password: string): Promise<void> {
-    await this.enterFirstName(firstName);
-    await this.enterLastName(lastName);
-    await this.enterEmail(email);
-    await this.enterPassword(password);
-    await this.enterConfirmPassword(password);
-    await this.checkTerms();
+    // Fill, then read back. If a late hydration wiped anything, fill again.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await this.enterFirstName(firstName);
+      await this.enterLastName(lastName);
+      await this.enterEmail(email);
+      await this.enterPassword(password);
+      await this.enterConfirmPassword(password);
+      await this.checkTerms();
+      await this.page.waitForTimeout(300);
+      if (await this.formHolds([
+        [this.firstNameInput, firstName], [this.lastNameInput, lastName], [this.emailInput, email],
+        [this.passwordInput, password], [this.confirmPasswordInput, password]
+      ])) return;
+    }
+  }
+
+  private async formHolds(expected: Array<[string, string]>): Promise<boolean> {
+    for (const [selector, value] of expected) {
+      const actual = await this.page.locator(selector).filter({ visible: true }).first().inputValue().catch(() => '');
+      if (actual !== value) return false;
+    }
+    return this.page.locator('input#checkbox-ready, input[name="checkbox-ready"]').first().isChecked({ timeout: 2000 }).catch(() => false);
   }
 
   async clickLoginLink(): Promise<void> {

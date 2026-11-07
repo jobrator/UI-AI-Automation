@@ -1,6 +1,7 @@
 import { Given, When, Then } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 import { CustomWorld } from '../../support/world';
+import { selectCvInApplyModal } from '../../support/apply-modal';
 import { BrowseJobsPage } from '../../pages/BrowseJobsPage';
 import { LoginPage } from '../../pages/LoginPage';
 import { EnvConfig } from '../../config/env.config';
@@ -72,16 +73,15 @@ Given('the candidate is logged in and navigates to the jobs listing page',
 );
 
 Given('the candidate opens a job detail page that they have not yet applied to',
+  { timeout: 180_000 },
   async function (this: CustomWorld) {
-    const jobsPage = getJobsPage(this);
-    // Navigate to jobs listing and click the first job card
-    await jobsPage.navigate();
-    await jobsPage.clickFirstJobCard();
-    await this.page.waitForLoadState('domcontentloaded');
-    // Verify the Apply button is not already showing "Applied"
-    const applyVisible = await jobsPage.isApplyButtonVisible();
-    expect(applyVisible, 'Apply button should be visible on the job detail page').toBeTruthy();
-    this.logMessage(`[BrowseJobs] Opened job detail page: ${this.page.url()}`);
+    const url = await getJobsPage(this).findJobNotYetAppliedTo();
+    expect(
+      url,
+      'every job on the first page of /jobs is already applied to by the shared candidate. ' +
+      'Post fresh jobs with `npm run seed`.'
+    ).not.toBeNull();
+    this.logMessage(`[BrowseJobs] Opened a job not yet applied to: ${url}`);
   }
 );
 
@@ -165,15 +165,36 @@ When('the user clicks on a job listing card',
 );
 
 When('the candidate clicks on a job listing card',
+  { timeout: 180_000 },
   async function (this: CustomWorld) {
-    await getJobsPage(this).clickFirstJobCard();
+    // Click the card of a job the candidate has not applied to yet, so the detail
+    // page shows Apply rather than the (correct) "Applied" state. See
+    // findJobNotYetAppliedTo().
+    const jobsPage = getJobsPage(this);
+    const url = await jobsPage.findJobNotYetAppliedTo();
+    expect(url, 'every job on the first page of /jobs is already applied to; run `npm run seed`').not.toBeNull();
+    await jobsPage.navigate();
+    const path = new URL(url!).pathname;
+    await this.page.locator(`.job-block a[href$="${path}"], .job-block a[href*="${path}"]`).first().click();
     await this.page.waitForLoadState('domcontentloaded');
   }
 );
 
 When('the candidate clicks the Apply button',
+  { timeout: 120_000 },
   async function (this: CustomWorld) {
+    // Clicking "Apply For Job" only opens the apply modal. Applying means choosing a
+    // CV in its custom dropdown and pressing "Apply Job" (without a CV the API 500s;
+    // see project memory "apply flow"). This step used to stop at opening the modal.
+    const jobId = Number(this.page.url().match(/\/jobs\/(\d+)/)?.[1]);
+    (this as any).appliedJobId = Number.isFinite(jobId) ? jobId : undefined;
     await getJobsPage(this).clickApply();
+    const dialog = this.page.locator('.modal, [role="dialog"]').filter({ hasText: 'Apply for this job' }).first();
+    await dialog.waitFor({ state: 'visible', timeout: 15_000 });
+    const cvChosen = await selectCvInApplyModal(this, dialog);
+    expect(cvChosen, 'no CV could be chosen in the apply modal (seed CVs with `npm run seed:full`)').toBeTruthy();
+    await dialog.locator('button', { hasText: /^Apply Job$/ }).first().click({ timeout: 15_000 });
+    await this.page.waitForTimeout(3000);
   }
 );
 
@@ -405,27 +426,38 @@ Then('the Apply button should be visible',
 Then('the application should be submitted',
   async function (this: CustomWorld) {
     await this.page.waitForTimeout(2000);
-    // After applying, the page should still be loaded and either show a confirmation
-    // or the Apply button state should have changed
-    const title = await this.page.title();
-    expect(title.length, 'Page title should exist after application submission').toBeGreaterThan(0);
-    this.logMessage(`[BrowseJobs] Application submitted. URL: ${this.page.url()}`);
+    // Prove it through the API's applied list. This used to assert only that the
+    // page had a title, so a failed application passed.
+    // Only trust a job ID recorded by the step that applied. Taking it from the URL
+    // could name a job applied to on an earlier run and pass on a failed application.
+    // The job-application journey doesn't record one; its next step verifies the
+    // application by title on the Applied Jobs page.
+    const jobId: number | undefined = (this as any).appliedJobId;
+    if (!jobId) {
+      this.logMessage('[BrowseJobs] No applied job ID recorded; the following step verifies the application.');
+      return;
+    }
+    const { appliedJobIds } = await import('../../support/candidate-api');
+    let recorded = false;
+    for (let i = 0; i < 5 && !recorded; i++) {
+      recorded = (await appliedJobIds()).has(jobId!);
+      if (!recorded) await this.page.waitForTimeout(2000);
+    }
+    expect(recorded, `job ${jobId} is not among the candidate's applications after applying`).toBeTruthy();
+    this.logMessage(`[BrowseJobs] Application to job ${jobId} recorded by the API.`);
   }
 );
 
 Then('a confirmation message or indicator should be shown',
   async function (this: CustomWorld) {
-    const visible = await getJobsPage(this).isConfirmationMessageVisible();
-    if (!visible) {
-      // Fallback: check if the Apply button now shows "Applied" (status changed)
-      const applied = await getJobsPage(this).isApplyButtonDisabledOrLabelled('Applied');
-      expect(
-        applied,
-        'Expected a confirmation message or "Applied" indicator after submitting an application'
-      ).toBeTruthy();
-    } else {
-      expect(visible, 'Confirmation message should be visible after application submission').toBeTruthy();
-    }
+    // A success popup, or the apply control flipping to "Applied". The old fallback,
+    // any element whose class contains "success", matched on almost any page.
+    const success = this.page.locator('.swal2-popup').filter({ hasText: /success|applied/i }).first();
+    const applied = this.page.locator('a, button').filter({ hasText: /^\s*(Already\s+)?Applied\s*$/i }).filter({ visible: true }).first();
+    await expect(
+      success.or(applied).first(),
+      'expected a success popup or an "Applied" indicator after applying'
+    ).toBeVisible({ timeout: 15_000 });
   }
 );
 

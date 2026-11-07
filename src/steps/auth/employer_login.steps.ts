@@ -38,15 +38,15 @@ Given('the authenticated employer navigates directly to the login page',
 // ─── When ─────────────────────────────────────────────────────────────────────
 
 When('the user enters the registered employer email', async function (this: CustomWorld) {
-  await getPage(this).enterEmail(envConfig.employerEmail);
+  await getPage(this).enterEmail(this.isolatedLoginAccount?.email ?? envConfig.employerEmail);
 });
 
 When('the user enters the registered employer password', async function (this: CustomWorld) {
-  await getPage(this).enterPassword(envConfig.employerPassword);
+  await getPage(this).enterPassword(this.isolatedLoginAccount?.password ?? envConfig.employerPassword);
 });
 
 When('the user enters the registered employer password in wrong case', async function (this: CustomWorld) {
-  await getPage(this).enterPassword(envConfig.employerPassword.toLowerCase());
+  await getPage(this).enterPassword((this.isolatedLoginAccount?.password ?? envConfig.employerPassword).toLowerCase());
 });
 
 When('the employer logs in with the newly registered account',

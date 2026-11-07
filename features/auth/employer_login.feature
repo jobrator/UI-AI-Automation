@@ -22,7 +22,7 @@ Feature: Employer Authentication — Login
     And the login submit button should be visible
     And the forgot password link should be visible
 
-  @negative @regression @TC_ELOG003
+  @negative @regression @TC_ELOG003 @isolated-employer-account
   Scenario: TC_ELOG003 - Login fails with an incorrect password
     When the user enters the registered employer email
     And the user enters password "WrongPassword999"
@@ -74,7 +74,7 @@ Feature: Employer Authentication — Login
       | user @jobrator.com  |
       | user..name@test.com |
 
-  @negative @regression @TC_ELOG009
+  @negative @regression @TC_ELOG009 @isolated-employer-account
   Scenario: TC_ELOG009 - Login fails with correct email but wrong-case password
     When the user enters the registered employer email
     And the user enters the registered employer password in wrong case
@@ -89,14 +89,14 @@ Feature: Employer Authentication — Login
     And the user clicks the login button
     Then the application should respond without crashing or throwing a server error
 
-  @boundary @regression @TC_ELOG011
+  @boundary @regression @TC_ELOG011 @isolated-employer-account
   Scenario: TC_ELOG011 - System handles a very long password gracefully
     When the user enters the registered employer email
     And the user enters a password that is 256 characters long
     And the user clicks the login button
     Then the application should respond without crashing or throwing a server error
 
-  @boundary @regression @TC_ELOG012
+  @boundary @regression @TC_ELOG012 @isolated-employer-account
   Scenario: TC_ELOG012 - System handles a single-character password
     When the user enters the registered employer email
     And the user enters password "a"
@@ -111,7 +111,7 @@ Feature: Employer Authentication — Login
     Then the SQL injection attempt should be rejected
     And the user should not be authenticated
 
-  @security @owasp @regression @TC_ELOG014
+  @security @owasp @regression @TC_ELOG014 @isolated-employer-account
   Scenario: TC_ELOG014 - OWASP A03 - SQL Injection via password field
     When the user enters the registered employer email
     And the user enters SQL injection payload "' OR 1=1 --" in the password field

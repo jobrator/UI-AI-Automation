@@ -241,55 +241,152 @@ Before({ tags: '@block-scripts' }, async function (this: CustomWorld) {
   this.logMessage('JavaScript blocked for @block-scripts scenario.');
 });
 
+// ─── Shared sign-in pre-condition ────────────────────────────────────────────
+
+/**
+ * Signs in through the UI for the @requires-*-login hooks, tolerating the login
+ * API's rate limit.
+ *
+ * The API answers 429 for several minutes once an email has had 5 consecutive
+ * failed attempts (ADO-29637 — the lockout the suite itself asked for). The
+ * negative scenarios in login.feature deliberately submit bad passwords for the
+ * shared candidate account, so when they run alongside the candidate features
+ * the account is locked and every sign-in pre-condition fails through no fault
+ * of the scenario. The front end reports that state as a generic
+ * "Unable to connect to the login server", so it has to be matched on text.
+ *
+ * Waiting the window out is what keeps those failures out of the report. A real
+ * bad credential is not retried — it never shows the lockout banner, so it
+ * throws on the first attempt with the page state attached.
+ */
+const LOCKOUT_BANNER = /too many|unable to connect to the login server|try again later/i;
+const LOGIN_RETRY_WAITS_MS = [45_000, 90_000];
+// Worst case: 3 attempts x (navigate + submit + 30s URL wait) + both waits, about 270s.
+// The hook timeout must sit above that, or Cucumber's bare "function timed out"
+// replaces the diagnostic thrown below. Measured 2026-11-05, a lockout lasts over 5
+// minutes, so this cannot outwait one; the real fix is that no scenario sends a bad
+// password to a shared account (@isolated-*-account). This is the safety net.
+const SIGN_IN_HOOK_TIMEOUT_MS = 330_000;
+
+async function signInPrecondition(
+  world: CustomWorld,
+  label: string,
+  doLogin: () => Promise<void>,
+  successUrl: RegExp
+): Promise<void> {
+  const attempts = LOGIN_RETRY_WAITS_MS.length + 1;
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    await doLogin();
+
+    try {
+      await world.page.waitForURL(successUrl, { timeout: 30_000 });
+      if (attempt > 1) {
+        world.logMessage(`Pre-condition: ${label} signed in on attempt ${attempt}.`);
+      }
+      return;
+    } catch {
+      const bannerText = await world.page
+        .locator('body')
+        .innerText()
+        .catch(() => '');
+      const lockedOut = LOCKOUT_BANNER.test(bannerText);
+
+      if (!lockedOut || attempt === attempts) {
+        const banner = (bannerText.match(LOCKOUT_BANNER) || ['(no lockout banner)'])[0];
+        throw new Error(
+          `${label} sign-in pre-condition failed after ${attempt} attempt(s). ` +
+            `URL: ${world.page.url()} — page said: "${String(banner).trim()}". ` +
+            (lockedOut
+              ? 'The login API is still rate-limiting this account; the negative ' +
+                'login scenarios most likely locked it out.'
+              : 'This looks like a genuine sign-in failure, not the rate limit.')
+        );
+      }
+
+      const wait = LOGIN_RETRY_WAITS_MS[attempt - 1];
+      world.logMessage(
+        `${label} sign-in hit the login rate limit; waiting ${wait / 1000}s before retrying ` +
+          `(attempt ${attempt} of ${attempts}).`
+      );
+      await world.page.waitForTimeout(wait);
+    }
+  }
+}
+
+/**
+ * Negative login scenarios tagged @isolated-candidate-account / @isolated-employer-account
+ * type a bad password for "the registered <role>". They get a freshly registered account
+ * of their own, so those failures never count toward the shared account's lockout.
+ */
+Before({ tags: '@isolated-candidate-account' }, async function (this: CustomWorld) {
+  const { registerThrowawayCandidate } = await import('../support/throwaway-accounts');
+  this.isolatedLoginAccount = await registerThrowawayCandidate();
+  this.logMessage(`Pre-condition: isolated candidate account ${this.isolatedLoginAccount.email}`);
+});
+
+Before({ tags: '@isolated-employer-account' }, async function (this: CustomWorld) {
+  const { registerThrowawayEmployer } = await import('../support/throwaway-accounts');
+  this.isolatedLoginAccount = await registerThrowawayEmployer();
+  this.logMessage(`Pre-condition: isolated employer account ${this.isolatedLoginAccount.email}`);
+});
+
 /** For employer scenarios that need to start already logged in */
-Before({ tags: '@requires-employer-login' }, async function (this: CustomWorld) {
+Before({ tags: '@requires-employer-login', timeout: SIGN_IN_HOOK_TIMEOUT_MS }, async function (this: CustomWorld) {
   const { EnvConfig } = await import('../config/env.config');
   const env = EnvConfig.getInstance();
   const { EmployerLoginPage } = await import('../pages/EmployerLoginPage');
 
   const loginPage = new EmployerLoginPage(this.page);
-  await loginPage.navigate();
-  await loginPage.login(env.employerEmail, env.employerPassword);
-
-  await this.page.waitForURL(/dashboard|home|employer|recruiter|jobs/, {
-    timeout: envConfig.navigationTimeout
-  });
+  await signInPrecondition(
+    this,
+    'employer',
+    async () => {
+      await loginPage.navigate();
+      await loginPage.login(env.employerEmail, env.employerPassword);
+    },
+    /dashboard|home|employer|recruiter|jobs/
+  );
 
   this.logMessage('Pre-condition: employer is now logged in (@requires-employer-login).');
 });
 
 /** For candidate scenarios that need to start already logged in */
-Before({ tags: '@requires-login' }, async function (this: CustomWorld) {
+Before({ tags: '@requires-login', timeout: SIGN_IN_HOOK_TIMEOUT_MS }, async function (this: CustomWorld) {
   const { EnvConfig } = await import('../config/env.config');
   const env = EnvConfig.getInstance();
   const { LoginPage } = await import('../pages/LoginPage');
 
   const loginPage = new LoginPage(this.page);
-  await loginPage.navigate();
-  await loginPage.login(env.candidateEmail, env.candidatePassword);
-
-  // Wait for post-login state
-  await this.page.waitForURL(/dashboard|home|profile|jobs|application/, {
-    timeout: envConfig.navigationTimeout
-  });
+  await signInPrecondition(
+    this,
+    'candidate',
+    async () => {
+      await loginPage.navigate();
+      await loginPage.login(env.candidateEmail, env.candidatePassword);
+    },
+    /dashboard|home|profile|jobs|application/
+  );
 
   this.logMessage('Pre-condition: user is now logged in (@requires-login).');
 });
 
 /** For candidate portal scenarios (alias for @requires-login with the @requires-candidate-login tag) */
-Before({ tags: '@requires-candidate-login' }, async function (this: CustomWorld) {
+Before({ tags: '@requires-candidate-login', timeout: SIGN_IN_HOOK_TIMEOUT_MS }, async function (this: CustomWorld) {
   const { EnvConfig } = await import('../config/env.config');
   const env = EnvConfig.getInstance();
   const { LoginPage } = await import('../pages/LoginPage');
 
   const loginPage = new LoginPage(this.page);
-  await loginPage.navigate();
-  await loginPage.login(env.candidateEmail, env.candidatePassword);
-
-  // Wait for post-login state
-  await this.page.waitForURL(/dashboard|home|profile|jobs|application/, {
-    timeout: envConfig.navigationTimeout
-  });
+  await signInPrecondition(
+    this,
+    'candidate',
+    async () => {
+      await loginPage.navigate();
+      await loginPage.login(env.candidateEmail, env.candidatePassword);
+    },
+    /dashboard|home|profile|jobs|application/
+  );
 
   this.logMessage('Pre-condition: candidate is now logged in (@requires-candidate-login).');
 });

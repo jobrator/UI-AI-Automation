@@ -26,6 +26,11 @@ export class CustomWorld extends World {
   // Credentials for a freshly-registered candidate (used in subscription scenarios)
   public freshCandidateEmail?: string;
   public freshCandidatePassword?: string;
+  // A per-scenario registered account for negative login scenarios, so bad passwords
+  // never hit the shared .env accounts (see support/throwaway-accounts.ts)
+  public isolatedLoginAccount?: { email: string; password: string };
+  // Raw login API responses, keyed by what was sent (login_bug_regressions.steps.ts)
+  public loginApiResponses: Record<string, { status: number; body: string }[]> = {};
 
   // ── Derived from cucumber worldParameters ────────────────────────────────
   public browserType: SupportedBrowser;

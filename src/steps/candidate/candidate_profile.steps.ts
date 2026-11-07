@@ -258,8 +258,21 @@ When('the candidate uploads a valid PNG profile picture',
 // ─── AI Generate Summary ─────────────────────────────────────────────────
 
 When('the candidate clicks the Generate via AI button on the profile summary section',
+  { timeout: 90_000 },
   async function (this: CustomWorld) {
-    await getProfilePage(this).clickAIGenerate();
+    const profilePage = getProfilePage(this);
+    // Record what was there first. The shared candidate already has a saved summary,
+    // so "the field is not empty" passed even when generation failed with a 500.
+    (this as any).summaryBeforeAi = await profilePage.getSummaryText();
+    const aiResponse = this.page
+      .waitForResponse((r) => /\/api\/account\/ai\//.test(r.url()) && r.request().method() === 'POST', { timeout: 60_000 })
+      .catch(() => null);
+    await profilePage.clickAIGenerate();
+    const response = await aiResponse;
+    (this as any).aiGenerateStatus = response ? response.status() : null;
+    (this as any).aiGenerateUrl = response ? response.url() : null;
+    this.logMessage(`[Profile AI] ${(this as any).aiGenerateUrl ?? '(no AI request seen)'} → ${(this as any).aiGenerateStatus}`);
+    await this.page.waitForTimeout(2000);
   }
 );
 
@@ -274,11 +287,16 @@ Then('an AI-generated career summary should be populated in the summary field',
       'AI summary generation should not be subscription-gated — the candidate account ' +
       'must hold an active Jobrator Plus plan (re-run `npm run seed:full`).'
     ).toBeFalsy();
-    const populated = await profilePage.isSummaryPopulated();
+    const status: number | null = (this as any).aiGenerateStatus ?? null;
+    expect(status, 'clicking Generate via AI made no AI request').not.toBeNull();
     expect(
-      populated,
-      'Expected the AI-generated summary to populate the summary field but it is empty'
+      status! >= 200 && status! < 300,
+      `the AI generation request failed: ${(this as any).aiGenerateUrl} answered ${status}`
     ).toBeTruthy();
+    const before: string = ((this as any).summaryBeforeAi ?? '').trim();
+    const after = (await profilePage.getSummaryText()).trim();
+    expect(after.length, 'the summary field is empty after generation').toBeGreaterThan(0);
+    expect(after, 'the summary did not change after Generate via AI').not.toBe(before);
   }
 );
 

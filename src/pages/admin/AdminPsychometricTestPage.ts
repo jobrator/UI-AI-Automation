@@ -1,4 +1,4 @@
-import { Page } from 'playwright';
+import { Locator, Page } from 'playwright';
 import { BasePage } from '../BasePage';
 import { EnvConfig } from '../../config/env.config';
 
@@ -142,6 +142,56 @@ export class AdminPsychometricTestPage extends BasePage {
     } else {
       console.warn('[AdminPsychometric] Save button not found — form may not be open or changes auto-saved.');
     }
+  }
+
+  // ── Exact, title-scoped helpers (verified against the live admin, 2026-11-05) ──
+  // Each exam renders as div.job-card holding its title, "ID: n" and View / Edit /
+  // Delete buttons. Delete raises two NATIVE dialogs: confirm("Are you sure you want
+  // to delete this exam?") then alert("Exam deleted successfully!").
+
+  /** The card for one exam, matched on its full, unique title. */
+  examCard(title: string): Locator {
+    return this.page.locator('div.job-card').filter({ hasText: title });
+  }
+
+  /** Creates an exam from the first question library that actually holds questions. */
+  async createExam(title: string, description: string): Promise<void> {
+    await this.page.locator('button:has-text("Create New Exam")').first().click();
+    await this.page.locator('input[placeholder="e.g., Software Engineer Assessment"]').first().waitFor({ timeout: 15000 });
+    await this.page.locator('input[placeholder="e.g., Software Engineer Assessment"]').first().fill(title);
+    await this.page.locator('textarea[placeholder="Description (optional)"]').first().fill(description);
+    await this.page.locator('input[placeholder="Duration in minutes"]').first().fill('30');
+    const select = this.page.locator('select.form-control').first();
+    // The library options are fetched after the form opens; wait for a real one.
+    await select.locator('option', { hasText: /\(\d+\s+questions\)/ }).first()
+      .waitFor({ state: 'attached', timeout: 20000 }).catch(() => {});
+    const options = await select.locator('option').evaluateAll((els) =>
+      els.map((e) => ({ v: (e as HTMLOptionElement).value, t: (e.textContent || '').trim() })));
+    const library = options.find((o) => o.v && Number(o.t.match(/\((\d+)\s+questions\)/)?.[1] ?? '0') > 0);
+    if (!library) throw new Error('No psychometric question library with questions is available to build an exam from.');
+    await select.selectOption(library.v);
+    await this.page.locator('button:has-text("Create Exam")').first().click();
+    await this.page.waitForTimeout(4000);
+  }
+
+  /**
+   * Deletes exactly the exam with this title, accepting its native confirm.
+   * Returns the dialog messages seen, so callers can assert the confirmation was asked.
+   */
+  async deleteExamByTitle(title: string): Promise<string[]> {
+    const card = this.examCard(title);
+    const matches = await card.count();
+    if (matches !== 1) throw new Error(`Expected exactly one exam titled "${title}", found ${matches}.`);
+    const dialogs: string[] = [];
+    const onDialog = async (d: import('playwright').Dialog) => { dialogs.push(d.message()); await d.accept(); };
+    this.page.on('dialog', onDialog);
+    try {
+      await card.locator('button:has-text("Delete")').click();
+      await this.page.waitForTimeout(4000);
+    } finally {
+      this.page.off('dialog', onDialog);
+    }
+    return dialogs;
   }
 
   async clickEdit(index = 0): Promise<void> {

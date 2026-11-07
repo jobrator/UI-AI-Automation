@@ -21,6 +21,7 @@
 import { Given, When, Then } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 import { CustomWorld } from '../../support/world';
+import { selectCvInApplyModal } from '../../support/apply-modal';
 import { EnvConfig } from '../../config/env.config';
 
 const envConfig = EnvConfig.getInstance();
@@ -155,7 +156,7 @@ async function registerThrowaway(runTag: string, lastName: string): Promise<Thro
   const form = new FormData();
   form.append('documentTypeId', '1');
   form.append('title', `${runTag}-${lastName}.pdf`);
-  form.append('uploadableFile', new Blob([cvPdf(`${runTag} ${lastName}`)], { type: 'application/pdf' }), `${runTag}-${lastName}.pdf`);
+  form.append('uploadableFile', new Blob([new Uint8Array(cvPdf(`${runTag} ${lastName}`))], { type: 'application/pdf' }), `${runTag}-${lastName}.pdf`);
   const upload = await api('POST', '/account/documents', { token, form });
   if (upload.status !== 200) throw new Error(`Uploading a CV for ${email} failed: ${upload.status}`);
   return { email, password: PASSWORD, firstName: 'Web', lastName, candidateId: body.data.candidate.id, token };
@@ -193,7 +194,10 @@ Given('a seeded job with a throwaway candidate who has applied on the web', asyn
 });
 
 async function seedJourney(world: CustomWorld, withExam: boolean, label: string): Promise<void> {
-  const runTag = `WINT-${new Date().toISOString().slice(5, 16).replace(/[-T:]/g, '')}`;
+  // Seconds plus a random suffix: minute resolution let two parallel journeys with
+  // the same label build the same throwaway email and fail registration with 422.
+  const stamp = new Date().toISOString().slice(5, 19).replace(/[-T:]/g, '');
+  const runTag = `WINT-${stamp}${Math.random().toString(36).slice(2, 6)}`;
   const employerToken = await apiLogin(envConfig.employerEmail, envConfig.employerPassword, 'Company');
   const jobTitle = `${runTag} ${withExam ? 'Exam' : 'Profile'} Job`;
   const jobId = await seedJob(employerToken, jobTitle, withExam);
@@ -234,10 +238,18 @@ async function applyOnWeb(world: CustomWorld): Promise<void> {
   const apply = page.locator('button:has-text("Apply"), a:has-text("Apply")').first();
   await apply.click();
   await page.waitForTimeout(3000);
-  // The apply dialog asks which saved CV to use; the seeded candidate has exactly one.
-  const confirm = page.locator('button:has-text("Apply"), button[type="submit"]').last();
+  // The apply dialog's CV picker is a custom dropdown, not a <select>. Until a CV is
+  // chosen the confirm button stays disabled (or the POST 500s), so pick the seeded
+  // candidate's one CV first.
+  const dialog = page.locator('.modal, [role="dialog"]').filter({ hasText: /Apply/i }).first();
+  const cvChosen = await selectCvInApplyModal(world, dialog);
+  if (!cvChosen) world.logMessage('[cross-channel] No CV picker found in the apply modal; confirming as-is.');
+  // Scope the submit to the modal. Unscoped, `.last()` picked the job page's own
+  // "Apply to Take Test" button on skill-exam jobs — correctly disabled until the
+  // candidate has applied, so the click timed out.
+  const confirm = dialog.locator('button', { hasText: /^Apply Job$/ }).first();
   if (await confirm.isVisible().catch(() => false)) {
-    await confirm.click();
+    await confirm.click({ timeout: 15_000 });
     await page.waitForTimeout(4000);
   }
   const applied = await api('GET', '/account/job-posts/applied/', { token: s.candidate.token });
@@ -276,44 +288,61 @@ Then('a skill test notification for the seeded job should be on the candidate da
     .toMatch(new RegExp(`skill test[\\s\\S]{0,120}${s.jobTitle.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}`, 'i'));
 });
 
-When('the candidate takes the attached skill test', async function (this: CustomWorld) {
+// Lists, rules screen, every question and the result page: well past the 60s default.
+When('the candidate takes the attached skill test', { timeout: 180_000 }, async function (this: CustomWorld) {
   const s = state(this);
   const page = this.page;
   await page.goto(site('/dashboard/job-attached-skill-test'), { waitUntil: 'domcontentloaded', timeout: envConfig.navigationTimeout });
   await page.waitForTimeout(4000);
   await expect(page.locator(`text=Job: ${s.jobTitle}`).first()).toBeVisible({ timeout: 20000 });
 
-  await page.locator('button:has-text("Take Test"), button:has-text("Start"), button:has-text("Click to Take Test")').first().click();
+  // "Click to Take Test" renders as an <a href="/dashboard/skill-test/startexam?...">, not a button.
+  await page
+    .locator('a:has-text("Click to Take Test"), button:has-text("Click to Take Test"), button:has-text("Take Test"), a:has-text("Take Test")')
+    .first()
+    .click();
   await page.waitForTimeout(4000);
-  // A rules screen with a readiness checkbox stands between the list and the questions.
-  const ready = page.locator('input[type="checkbox"]').first();
-  if (await ready.isVisible().catch(() => false)) await ready.check().catch(() => undefined);
-  const start = page.locator('button:has-text("Start Test")').first();
-  if (await start.isVisible().catch(() => false)) {
-    await start.click();
-    await page.waitForTimeout(4000);
-  }
+  // Rules screen: the "I am ready" checkbox is CSS-hidden (like the login page's
+  // checkbox-ready), so set it through the DOM; START TEST is an <a>, not a button.
+  await page.locator('a:has-text("START TEST"), button:has-text("START TEST")').first().waitFor({ timeout: 20_000 });
+  await page.evaluate(() => {
+    const box = document.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+    if (box && !box.checked) box.click();
+  });
+  await page.locator('a:has-text("START TEST"), button:has-text("START TEST")').first().click();
+  await page.waitForURL(/skill-test\/take\//, { timeout: 30_000 });
 
   // Answer every question with its first option. Which answers are right is not what this
   // journey tests - the score arriving intact on the other side is.
-  for (let question = 0; question < 30; question += 1) {
-    const option = page.locator('input[type="radio"], label:has(input[type="radio"])').first();
-    if (await option.isVisible().catch(() => false)) await option.click().catch(() => undefined);
-    const submit = page.locator('button:has-text("Submit")').first();
-    const next = page.locator('button:has-text("Next")').first();
+  for (let question = 0; question < 40; question += 1) {
+    // DOM click: the styled radios fail Playwright's actionability checks, and check()
+    // would sit out its full timeout on every question.
+    await page.locator('input[type="radio"]').first().evaluate((r: HTMLInputElement) => r.click()).catch(() => undefined);
+    const submit = page.locator('button:has-text("Submit Test")').first();
     if (await submit.isVisible().catch(() => false)) {
       await submit.click();
+      // "Submit Test?" confirmation dialog.
+      await page.locator('button:has-text("Yes, submit")').first().click({ timeout: 10_000 });
       break;
     }
-    if (!(await next.isVisible().catch(() => false))) break;
+    const next = page.locator('button:has-text("Next")').first();
+    if (!(await next.isEnabled().catch(() => false))) break;
     await next.click();
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(800);
   }
-  await page.waitForTimeout(6000);
+
+  // The result page shows "Your Score  <correct> / <total>". Read that label only: the
+  // exam page also shows a "Progress 25%" bar and the dashboard a "Skills Percentage",
+  // either of which a bare /\d+%/ would have mistaken for the score.
+  await page.waitForURL(/skill-test\/result/, { timeout: 30_000 });
+  // The result page fetches the score after it mounts; wait for the label itself.
+  await page.getByText(/Your Score/i).first().waitFor({ timeout: 30_000 });
+  await page.waitForFunction(() => /Your Score\s*\d+\s*\/\s*\d+/i.test(document.body.innerText), undefined, { timeout: 30_000 });
   const shown = await page.locator('body').innerText();
-  const score = shown.match(/(\d+(?:\.\d+)?)\s*%/);
-  expect(score, 'no score is shown after submitting the exam').not.toBeNull();
-  s.webScore = score![1];
+  const score = shown.match(/Your Score\s*(\d+)\s*\/\s*(\d+)/i);
+  expect(score, 'no "Your Score n / m" is shown after submitting the exam').not.toBeNull();
+  const [correct, total] = [Number(score![1]), Number(score![2])];
+  s.webScore = String(total === 0 ? 0 : Math.round((1000 * correct) / total) / 10);
   this.logMessage(`[cross-channel] the web shows a score of ${s.webScore}%`);
 });
 
@@ -330,7 +359,9 @@ Then('the score shown on the web should match the score the API recorded', async
 Then('the attached skill test should then be refused as already taken', async function (this: CustomWorld) {
   await this.page.goto(site('/dashboard/job-attached-skill-test'), { waitUntil: 'domcontentloaded', timeout: envConfig.navigationTimeout });
   await this.page.waitForTimeout(4000);
-  await expect(this.page.locator('button:has-text("Exam Already Taken"), text=Exam Already Taken').first())
+  // getByText, not a CSS list: 'button:has-text(...), text=...' mixes selector engines
+  // and Playwright rejects it as unparseable before it ever looks at the page.
+  await expect(this.page.getByText(/Exam Already Taken/i).first())
     .toBeVisible({ timeout: 20000 });
 });
 
@@ -426,7 +457,9 @@ Then('the employer should see the same skill test score for the candidate', asyn
 Then('the applicant list should load without an error', async function (this: CustomWorld) {
   const text = await this.page.locator('body').innerText();
   expect(text, 'the applicants page rendered an error after the candidate was deleted')
-    .not.toMatch(/something went wrong|application error|500|unhandled/i);
+    // \b500\b, not 500: job titles carry run tags and timestamps (WINT-1105205500wjk1,
+    // "Journey QA Job 1793910500123"), and a bare /500/ failed whenever one held those digits.
+    .not.toMatch(/something went wrong|application error|internal server error|\b500\b|unhandled/i);
 });
 
 Then('no applicant row should be left without a candidate name', async function (this: CustomWorld) {
@@ -435,5 +468,21 @@ Then('no applicant row should be left without a candidate name', async function 
   // Either behaviour is defensible and the PO has not ruled: the applicant may vanish or be
   // marked as deleted. What must not happen is a row with a status and no name.
   this.logMessage(`[cross-channel] after deletion the applicant list ${text.includes(s.candidate.lastName) ? 'still lists' : 'no longer lists'} the candidate`);
-  expect(text, 'an applicant row is left without a candidate name').not.toMatch(/(^|\n)\s*(Pending|Shortlisted|Selected|Rejected)\s*(\n|$)/);
+
+  // Each applicant card renders as: <name> / "Applied for: <job>" / ... / <status badge>.
+  // So the line just above "Applied for:" is the name slot. A nameless row shows up as
+  // that slot holding the previous card's status badge, a header counter
+  // ("Shortlisted: 6") or an empty placeholder. (Matching any bare "Pending" line, as
+  // this used to, failed on every healthy row, because each one ends with its badge.)
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  const notAName = /^(Pending|Shortlisted|Selected|Rejected|Applicant|undefined|null|N\/A|-)$|:\s*\d+$/i;
+  const nameless: string[] = [];
+  lines.forEach((line, i) => {
+    if (!line.startsWith('Applied for:')) return;
+    const slot = i > 0 ? lines[i - 1] : '';
+    if (!slot || notAName.test(slot)) nameless.push(`${line} (name slot: "${slot}")`);
+  });
+  const seededRow = lines.findIndex((l) => l === `Applied for: ${s.jobTitle}`);
+  if (seededRow > 0) this.logMessage(`[cross-channel] seeded job's applicant row is named "${lines[seededRow - 1]}"`);
+  expect(nameless, `applicant rows left without a candidate name:\n${nameless.join('\n')}`).toEqual([]);
 });

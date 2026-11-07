@@ -67,15 +67,15 @@ When('the user enters password {string}', async function (this: CustomWorld, pas
 });
 
 When('the user enters the registered candidate email', async function (this: CustomWorld) {
-  await getLoginPage(this).enterEmail(envConfig.candidateEmail);
+  await getLoginPage(this).enterEmail(this.isolatedLoginAccount?.email ?? envConfig.candidateEmail);
 });
 
 When('the user enters the registered candidate password', async function (this: CustomWorld) {
-  await getLoginPage(this).enterPassword(envConfig.candidatePassword);
+  await getLoginPage(this).enterPassword(this.isolatedLoginAccount?.password ?? envConfig.candidatePassword);
 });
 
 When('the user enters the registered candidate password in wrong case', async function (this: CustomWorld) {
-  await getLoginPage(this).enterPassword(envConfig.candidatePassword.toLowerCase());
+  await getLoginPage(this).enterPassword((this.isolatedLoginAccount?.password ?? envConfig.candidatePassword).toLowerCase());
 });
 
 When('the user leaves the email field empty', async function (this: CustomWorld) {
@@ -140,8 +140,12 @@ When('the user enters XSS payload {string} in the email field',
 When('the user submits incorrect credentials {int} times in a row',
   async function (this: CustomWorld, attempts: number) {
     const loginPage = getLoginPage(this);
+    // A throwaway address, never the .env candidate: the lockout is per-email and
+    // answers 429 for several minutes, which would fail every other scenario that
+    // signs in as the real candidate while this one runs.
+    const throwaway = `bruteforce-${Date.now()}@mailinator.com`;
     await loginPage.attemptLoginMultipleTimes(
-      envConfig.candidateEmail,
+      throwaway,
       'WrongBruteForcePass!',
       attempts
     );

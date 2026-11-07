@@ -19,13 +19,32 @@ const fs = require('fs');
 const report = require('multiple-cucumber-html-reporter');
 
 const reportsDir = path.resolve('reports');
-const jsonDir = reportsDir;
+// The reporter globs every *.json in jsonDir, so it must be a directory holding
+// ONLY this run's output — pointed at reports/ it also ingested kept snapshots
+// and unrelated files like retest-sprint58.json.
+const jsonDir = path.join(reportsDir, 'json-current');
 const htmlDir = path.join(reportsDir, 'html');
 
-// Collect all cucumber JSON files in the reports directory
-const jsonFiles = fs
-  .readdirSync(reportsDir)
-  .filter((f) => f.startsWith('cucumber-report') && f.endsWith('.json'));
+// Only this run's JSON files. A prefix glob would also sweep up kept snapshots
+// (cucumber-report-fullrun.json, cucumber-report-prev-*.json) and silently
+// double-count old scenarios into the report.
+const CURRENT_RUN_JSON = [
+  'cucumber-report.json',
+  'cucumber-report-chrome.json',
+  'cucumber-report-firefox.json'
+];
+
+const jsonFiles = CURRENT_RUN_JSON.filter((f) => {
+  const full = path.join(reportsDir, f);
+  return fs.existsSync(full) && fs.statSync(full).size > 0;
+});
+
+// Stage this run's JSON into the clean directory the reporter reads.
+fs.rmSync(jsonDir, { recursive: true, force: true });
+fs.mkdirSync(jsonDir, { recursive: true });
+for (const f of jsonFiles) {
+  fs.copyFileSync(path.join(reportsDir, f), path.join(jsonDir, f));
+}
 
 if (jsonFiles.length === 0) {
   console.warn('[report] No cucumber JSON files found — skipping HTML report.');

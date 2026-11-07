@@ -21,19 +21,22 @@ When('the admin saves the changes', async function (this: CustomWorld) {
 });
 
 When('the admin confirms the deletion', async function (this: CustomWorld) {
-  // Register dialog handler first (covers native browser confirm dialogs)
+  // Accept a native confirm if one is raised from here on.
   this.page.once('dialog', async (dialog) => { await dialog.accept(); });
   await this.page.waitForTimeout(300);
 
-  // Try visible modal/confirm buttons
+  // Only press a confirm button INSIDE an open modal. This used to fall back to any
+  // visible "Delete" button on the page, which on a list means the FIRST row's Delete,
+  // and with the native confirm then auto-accepted it deleted whichever record
+  // happened to be first, not the one the scenario chose.
   const confirmBtn = this.page.locator(
-    'button:has-text("Confirm"), button:has-text("Yes"), ' +
-    'button:has-text("Delete"), .modal button:has-text("OK"), ' +
-    '[class*="confirm"], .btn-danger:has-text("Delete"), .swal-button--danger'
+    '.modal.show button:has-text("Confirm"), .modal.show button:has-text("Yes"), ' +
+    '.modal.show button:has-text("Delete"), .modal.show button:has-text("OK"), ' +
+    '.swal2-popup .swal2-confirm, .swal-modal .swal-button--danger, ' +
+    '[role="dialog"] button:has-text("Confirm"), [role="dialog"] button:has-text("Delete")'
   ).first();
 
-  const btnExists = await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false);
-  if (btnExists) {
+  if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
     await confirmBtn.click();
   }
   await this.page.waitForTimeout(1000);

@@ -166,47 +166,43 @@ Then('the updated psychometric exam should be reflected on the psychometric test
 //  PSYCHOMETRIC TESTS — Delete
 // ══════════════════════════════════════════════════════════════════════════════
 
+// TC_AT004 deletes an exam it created itself. It used to delete "the first exam on the
+// page", which was the shared one seeded for TC_AT001/TC_AT003, so every run broke the
+// next. It also passed on "count after <= count before" even when nothing was deleted.
+let _examToDelete = '';
+let _deleteDialogs: string[] = [];
+
 Given('at least one psychometric exam exists that can be safely deleted',
+  { timeout: 120_000 },
   async function (this: CustomWorld) {
     const page = getPsychometricPage(this);
-    await page.waitForExamsLoaded();
-    const count = await page.getExamCount();
-    _initialPsychoCount = count;
-    if (count === 0) {
-      // No exam data loaded — typically the admin exam list could not be fetched
-      // (backend/list unavailable). There is nothing to safely delete, so we
-      // soft-skip rather than hard-fail the destructive delete scenario.
-      this.logMessage(
-        '[Admin Psychometric] No psychometric exams available to delete — ' +
-        'soft-skipping deletion (exam list did not load).'
-      );
-    }
-    // Non-fatal: subsequent delete/confirm steps no-op safely when count is 0.
-    expect(true, 'Psychometric deletion precondition evaluated').toBeTruthy();
+    _examToDelete = `E2E Delete Target ${Date.now()}`;
+    await page.createExam(_examToDelete, 'Created by TC_AT004 to be deleted by TC_AT004.');
+    await page.navigate();
+    await expect(page.examCard(_examToDelete), `the exam "${_examToDelete}" was not created`).toHaveCount(1, { timeout: 20_000 });
+    this.logMessage(`[Admin Psychometric] Created "${_examToDelete}" to delete.`);
   }
 );
 
 When('the admin clicks the Delete action on a psychometric exam',
   async function (this: CustomWorld) {
-    const page = getPsychometricPage(this);
-    await page.clickDelete(0);
+    // Clicks Delete on that exam's own card and answers the native confirm in the same
+    // step. Left unanswered, Playwright auto-dismisses it (cancel). The shared
+    // "confirms the deletion" step then has nothing left to do here.
+    _deleteDialogs = await getPsychometricPage(this).deleteExamByTitle(_examToDelete);
+    this.logMessage(`[Admin Psychometric] Dialogs: ${JSON.stringify(_deleteDialogs)}`);
   }
 );
 
 Then('the psychometric exam should be removed from the psychometric test list',
   async function (this: CustomWorld) {
-    await this.page.waitForTimeout(1000);
-    const page = getPsychometricPage(this);
-    const onPage = await page.isLoaded();
-    if (!onPage) {
-      await page.navigate();
-    }
-    const newCount = await page.getExamCount();
-    this.logMessage(`[Admin Psychometric] Count before: ${_initialPsychoCount}, after: ${newCount}`);
     expect(
-      newCount <= _initialPsychoCount,
-      `Psychometric exam count should have decreased. Before: ${_initialPsychoCount}, After: ${newCount}`
+      _deleteDialogs.some((m) => /are you sure/i.test(m)),
+      `deleting should ask for confirmation first; dialogs seen: ${JSON.stringify(_deleteDialogs)}`
     ).toBeTruthy();
+    const page = getPsychometricPage(this);
+    await page.navigate();
+    await expect(page.examCard(_examToDelete), `"${_examToDelete}" is still listed after deletion`).toHaveCount(0, { timeout: 20_000 });
   }
 );
 

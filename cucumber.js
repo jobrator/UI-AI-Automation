@@ -96,7 +96,8 @@ module.exports = {
     ...common,
     parallel: 1,
     worldParameters: { browser: 'chromium' },
-    // eslint-disable-next-line no-template-curly-in-string
-    paths: ['@reports/@rerun.txt']
+    // Cucumber-JS 12 reads a rerun file from its plain path. The old
+    // '@reports/@rerun.txt' form was resolved literally and failed with ENOENT.
+    paths: ['reports/@rerun.txt']
   }
 };
