@@ -22,7 +22,7 @@ Feature: User Authentication — Login
     And the login submit button should be visible
     And the forgot password link should be visible
 
-  @negative @regression @TC003
+  @negative @regression @TC003 @isolated-candidate-account
   Scenario: TC003 — Login fails with an incorrect password
     When the user enters the registered candidate email
     And the user enters password "WrongPassword999"
@@ -74,7 +74,7 @@ Feature: User Authentication — Login
       | user @jobrator.com  |
       | user..name@test.com |
 
-  @negative @regression @TC009
+  @negative @regression @TC009 @isolated-candidate-account
   Scenario: TC009 — Login fails with correct email but wrong-case password
     When the user enters the registered candidate email
     And the user enters the registered candidate password in wrong case
@@ -89,14 +89,14 @@ Feature: User Authentication — Login
     And the user clicks the login button
     Then the application should respond without crashing or throwing a server error
 
-  @boundary @regression @TC011
+  @boundary @regression @TC011 @isolated-candidate-account
   Scenario: TC011 — System handles a very long password gracefully
     When the user enters the registered candidate email
     And the user enters a password that is 256 characters long
     And the user clicks the login button
     Then the application should respond without crashing or throwing a server error
 
-  @boundary @regression @TC012
+  @boundary @regression @TC012 @isolated-candidate-account
   Scenario: TC012 — System handles a single-character password
     When the user enters the registered candidate email
     And the user enters password "a"
@@ -111,7 +111,7 @@ Feature: User Authentication — Login
     Then the SQL injection attempt should be rejected
     And the user should not be authenticated
 
-  @security @owasp @regression @TC014
+  @security @owasp @regression @TC014 @isolated-candidate-account
   Scenario: TC014 — OWASP A03 — SQL Injection via password field
     When the user enters the registered candidate email
     And the user enters SQL injection payload "' OR 1=1 --" in the password field

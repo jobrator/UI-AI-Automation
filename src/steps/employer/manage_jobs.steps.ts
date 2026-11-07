@@ -303,8 +303,17 @@ Then('the deactivated job should no longer appear on the public jobs listing pag
     await this.page.waitForTimeout(2000);
 
     if (deactivatedTitle) {
-      const titleSel = `*:has-text("${deactivatedTitle.substring(0, 20)}")`;
-      const count = await this.page.locator(titleSel).count();
+      // Full title on job cards only. The old check matched the first 20 characters
+      // with `*:has-text()`, so seeded titles sharing a prefix ("Journey QA Job 17939…")
+      // and every ancestor element counted as hits. Search with the listing's live
+      // filter (typing is enough; Enter reloads and drops it) so pagination can't hide
+      // a still-published job.
+      const search = this.page.locator('input[name="listing-search"]').filter({ visible: true }).first();
+      if (await search.isVisible({ timeout: 5000 }).catch(() => false)) {
+        await search.fill(deactivatedTitle);
+        await this.page.waitForTimeout(3000);
+      }
+      const count = await this.page.locator('.job-block').filter({ hasText: deactivatedTitle }).count();
       expect(
         count,
         `Deactivated job "${deactivatedTitle}" should not appear on the public jobs listing page`

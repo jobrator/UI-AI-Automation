@@ -16,6 +16,11 @@ reports/subscribe/
 reports/mobile/
 # Rotated copies of the cucumber JSON
 reports/cucumber-report-prev-*.json
+# Full-run snapshot (see RUNBOOK.md) and archived older snapshots
+reports/cucumber-report-fullrun.json
+reports/archive/
+# Clean staging dir the HTML reporter reads
+reports/json-current/
 
 # OS
 .DS_Store

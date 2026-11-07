@@ -275,6 +275,31 @@ export class BrowseJobsPage extends BasePage {
     return this.isVisibleWaited(this.employerNameOnDetail);
   }
 
+  /**
+   * Finds a job on the listing's first page that the shared candidate has NOT
+   * applied to, and returns its detail URL (or null if there is none).
+   *
+   * Taking "the first card" was not enough. The newest jobs are the seeded ones, and
+   * `seed:full` and the journeys apply to them as the shared candidate. Nor can the
+   * detail page decide it: it renders "Apply For Job" first and flips to "Applied"
+   * a moment later. So the applied set comes from the API.
+   */
+  async findJobNotYetAppliedTo(): Promise<string | null> {
+    const { appliedJobIds } = await import('../support/candidate-api');
+    const applied = await appliedJobIds();
+    await this.navigate();
+    await this.page.waitForSelector('.job-block a[href*="/jobs/"]', { timeout: 12000 }).catch(() => {});
+    const hrefs = await this.page.locator('.job-block a[href*="/jobs/"]').evaluateAll((els) =>
+      Array.from(new Set(els.map((e) => (e as HTMLAnchorElement).href))));
+    const free = hrefs.find((h) => {
+      const id = Number(new URL(h).pathname.match(/\/jobs\/(\d+)/)?.[1]);
+      return Number.isFinite(id) && !applied.has(id);
+    });
+    if (!free) return null;
+    await this.page.goto(free, { waitUntil: 'domcontentloaded' });
+    return free;
+  }
+
   async isApplyButtonVisible(): Promise<boolean> {
     return this.isVisibleWaited(this.applyButton);
   }

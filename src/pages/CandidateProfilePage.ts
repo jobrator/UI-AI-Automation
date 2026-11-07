@@ -398,6 +398,17 @@ export class CandidateProfilePage extends BasePage {
     return gate.isVisible({ timeout: 2000 }).catch(() => false);
   }
 
+  /** The summary field's current text ('' if it cannot be read). */
+  async getSummaryText(): Promise<string> {
+    const loc = this.page.locator(this.profileSummaryField).filter({ visible: true }).first();
+    try {
+      const tag = await loc.evaluate((n) => n.tagName.toLowerCase()).catch(() => '');
+      return tag === 'textarea' || tag === 'input' ? await loc.inputValue() : await loc.innerText();
+    } catch {
+      return '';
+    }
+  }
+
   async isSummaryPopulated(): Promise<boolean> {
     const loc = this.page.locator(this.profileSummaryField).filter({ visible: true }).first();
     try {
